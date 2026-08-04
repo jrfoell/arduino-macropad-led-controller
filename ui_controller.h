@@ -1,0 +1,286 @@
+// ui_controller.h
+// The verb/noun/menu interaction state machine that ties the keypad, rotary
+// input, OLED, and keypad LEDs together, per
+// docs/superpowers/specs/2026-08-02-ui-navigation-design.md.
+//
+// PROTOTYPE SCOPE — first coding pass, expect to refactor: only the
+// "Presets" branch (verb 1) is implemented end to end, reachable either by
+// keypad (<verb> 1 <noun> <digits>) or by the OLED menu (rotary scroll +
+// press). "Custom" and pattern verbs (2+) are not implemented yet — picking
+// "Custom" from the top menu just shows a placeholder hint. "Brightness" is
+// intentionally rotary-only, no keypad equivalent — a continuous 0-100
+// value fits the rotary knob's turn-to-adjust motion better than digit entry.
+//
+// Known rough edges, left as-is for now and flagged rather than solved:
+//   - Message/input text was condensed to fit the 21-char/line OLED budget
+//     (see oled_display.h) rather than the exact wording used while
+//     designing this out loud — easy to reword, all of it lives right here.
+//   - If you type a noun digit right after turning the rotary knob
+//     mid-session, the digit REPLACES that value rather than appending to
+//     it (matches "first digit replaces, subsequent digits append" but
+//     doesn't special-case an intervening rotary turn). Revisit if it feels
+//     wrong in practice.
+//   - Confirming always returns to the top-level menu afterward — not
+//     explicitly decided, just a reasonable default.
+//   - Applying brightness to the *outdoor* installation is still stubbed
+//     (debug print only) — no `led_output.h` API exists yet to call. Flash
+//     persistence of both the active scheme and brightness, however, is
+//     real (see settings_storage.h).
+//
+// Exposes:
+//   initUiController()   — call once in setup(), after keypad/rotary/OLED/
+//                           keypad LEDs/schemes/settings storage are all
+//                           initialized
+//   updateUiController()  — call every loop()
+
+#pragma once
+
+#include <stdio.h>
+#include "debug.h"
+#include "keypad_input.h"
+#include "rotary_input.h"
+#include "oled_display.h"
+#include "keypad_leds.h"
+#include "led_presets.h"
+#include "settings_storage.h"
+
+#define UI_HINT_DURATION_MS 2000
+#define BRIGHTNESS_STEP_PERCENT 5  // per felt detent; 20 detents/rev * 5% = 100%/rev
+
+enum UiMenuState  { UI_MENU_TOP, UI_MENU_PRESET_LIST, UI_MENU_BRIGHTNESS };
+enum UiEntryState { UI_ENTRY_IDLE, UI_ENTRY_VERB, UI_ENTRY_NOUN };
+
+static UiMenuState  _uiMenuState  = UI_MENU_TOP;
+static UiEntryState _uiEntryState = UI_ENTRY_IDLE;
+
+static int _uiTopHighlight   = 0;      // 0=Brightness, 1=Presets, 2=Custom
+static int _uiVerbCode       = -1;     // -1 = no digit entered yet this verb session
+static int _uiPreviewMonth   = 1;      // 1-12, shared by rotary browse + noun digit entry
+static bool _uiNounHasDigits = false;  // has at least one digit been typed this noun session
+
+// Overwritten from flash in initUiController() (see settings_storage.h) —
+// these initializers are just the pre-boot default.
+static int _uiConfirmedBrightness = 100;  // 0-100, applied to every preview + (stubbed) outdoor output
+static int _uiPendingBrightness   = 100;  // 0-100, live value while UI_MENU_BRIGHTNESS is active
+
+static unsigned long _uiHintUntilMs = 0;
+static char _uiHintText[OLED_TEXT_COLS + 1] = "";
+
+static inline void _uiShowHint(const char* text) {
+  snprintf(_uiHintText, sizeof(_uiHintText), "%s", text);
+  _uiHintUntilMs = millis() + UI_HINT_DURATION_MS;
+}
+
+static inline void _uiShowPreviewColors(uint32_t colors[NUM_NEOPIXEL], int brightnessPercent) {
+  for (uint8_t i = 0; i < NUM_NEOPIXEL; i++) {
+    colors[i] = scaleColorBrightness(colors[i], brightnessPercent);
+  }
+  showKeypadLedColors(colors);
+}
+
+static inline void _uiUpdatePreview() {
+  uint32_t colors[NUM_NEOPIXEL];
+  getSchemePreviewColors(_uiPreviewMonth - 1, colors);
+  _uiShowPreviewColors(colors, _uiConfirmedBrightness);
+}
+
+// Previews the currently-*active* scheme (not whatever's pending in the
+// Presets flow) at the in-progress brightness level.
+static inline void _uiUpdateBrightnessPreview() {
+  uint32_t colors[NUM_NEOPIXEL];
+  getSchemePreviewColors(getActiveScheme(), colors);
+  _uiShowPreviewColors(colors, _uiPendingBrightness);
+}
+
+static inline void _uiRenderMenu() {
+  if (_uiMenuState == UI_MENU_TOP) {
+    renderMenuTop(_uiTopHighlight);
+  } else if (_uiMenuState == UI_MENU_PRESET_LIST) {
+    renderMenuPresetList(_uiPreviewMonth, SCHEME_NAMES, NUM_SCHEMES);
+  } else {
+    renderMenuBrightness(_uiPendingBrightness);
+  }
+}
+
+static inline void _uiRenderMessage() {
+  if (millis() < _uiHintUntilMs) {
+    renderMessage(_uiHintText);
+  } else if (_uiMenuState == UI_MENU_PRESET_LIST || _uiMenuState == UI_MENU_BRIGHTNESS) {
+    renderMessage("Rotary Press: Confirm");
+  } else {
+    renderMessage("");
+  }
+}
+
+static inline void _uiRenderInput() {
+  char line[OLED_TEXT_COLS + 1];
+  if (_uiEntryState == UI_ENTRY_IDLE) {
+    renderInputLine("");
+  } else if (_uiEntryState == UI_ENTRY_VERB) {
+    if (_uiVerbCode < 0) {
+      renderInputLine("V: _");
+    } else if (_uiVerbCode == 1) {
+      snprintf(line, sizeof(line), "V:%d Preset", _uiVerbCode);
+      renderInputLine(line);
+    } else {
+      snprintf(line, sizeof(line), "V:%d ?", _uiVerbCode);
+      renderInputLine(line);
+    }
+  } else {  // UI_ENTRY_NOUN — verb is always 1 (Preset) for now
+    if (_uiNounHasDigits) {
+      snprintf(line, sizeof(line), "V:1 Preset N:%d", _uiPreviewMonth);
+    } else {
+      snprintf(line, sizeof(line), "V:1 Preset N:_");
+    }
+    renderInputLine(line);
+  }
+}
+
+static inline void _uiRenderAll() {
+  _uiRenderMenu();
+  _uiRenderMessage();
+  _uiRenderInput();
+}
+
+static inline void _uiConfirm() {
+  if (_uiMenuState == UI_MENU_PRESET_LIST) {
+    setActiveScheme(_uiPreviewMonth - 1);
+    saveSettings(getActiveScheme(), _uiConfirmedBrightness);
+    clearKeypadLeds();
+    _uiEntryState  = UI_ENTRY_IDLE;
+    _uiMenuState   = UI_MENU_TOP;
+    _uiHintUntilMs = 0;
+  } else if (_uiMenuState == UI_MENU_BRIGHTNESS) {
+    _uiConfirmedBrightness = _uiPendingBrightness;
+    // TODO: apply to the outdoor installation — no led_output.h API exists
+    // yet to call, see "Persistence" in the design doc. Flash persistence
+    // itself is real, below.
+    saveSettings(getActiveScheme(), _uiConfirmedBrightness);
+    clearKeypadLeds();
+    _uiMenuState   = UI_MENU_TOP;
+    _uiHintUntilMs = 0;
+  } else {
+    // UI_MENU_TOP — descend into the highlighted item.
+    if (_uiTopHighlight == 0) {
+      _uiMenuState = UI_MENU_BRIGHTNESS;
+      _uiPendingBrightness = _uiConfirmedBrightness;
+      _uiUpdateBrightnessPreview();
+    } else if (_uiTopHighlight == 1) {
+      _uiMenuState = UI_MENU_PRESET_LIST;
+      _uiUpdatePreview();
+    } else {
+      _uiShowHint("Custom: not built yet");
+    }
+  }
+  _uiRenderAll();
+}
+
+static inline void _uiRestartVerbEntry() {
+  _uiEntryState    = UI_ENTRY_VERB;
+  _uiVerbCode      = -1;
+  _uiNounHasDigits = false;
+  _uiHintUntilMs   = 0;
+  _uiRenderAll();
+}
+
+// <verb> normally (re)starts verb entry from scratch ("V: _"). But if it's
+// pressed while already sitting at that exact "waiting for a verb digit"
+// state, it goes one step further and clears the input line back to idle
+// instead — a double-tap-<verb> cancel, rather than restarting into the
+// same state it was already in.
+static inline void _uiHandleVerbKey() {
+  if (_uiEntryState == UI_ENTRY_VERB && _uiVerbCode < 0) {
+    _uiEntryState  = UI_ENTRY_IDLE;
+    _uiHintUntilMs = 0;
+    _uiRenderAll();
+  } else {
+    _uiRestartVerbEntry();
+  }
+}
+
+static inline void _uiHandleDigit(uint8_t digit) {
+  if (_uiEntryState == UI_ENTRY_VERB) {
+    _uiVerbCode = digit;
+    if (_uiVerbCode == 1) {
+      _uiMenuState = UI_MENU_PRESET_LIST;
+      _uiUpdatePreview();
+    }
+    _uiRenderAll();
+  } else if (_uiEntryState == UI_ENTRY_NOUN) {
+    int tentative = _uiNounHasDigits ? (_uiPreviewMonth * 10 + digit) : digit;
+    if (tentative >= 1 && tentative <= NUM_SCHEMES) {
+      _uiPreviewMonth  = tentative;
+      _uiNounHasDigits = true;
+      _uiUpdatePreview();
+      _uiRenderAll();
+    }
+    // else: ignore the keystroke — it would exceed a valid month number.
+  } else {
+    _uiShowHint("Press Verb (bottom)");
+    _uiRenderAll();
+  }
+}
+
+static inline void initUiController() {
+  int savedScheme, savedBrightness;
+  loadSettings(&savedScheme, &savedBrightness);
+  setActiveScheme(savedScheme);
+  _uiConfirmedBrightness = savedBrightness;
+  _uiPendingBrightness   = savedBrightness;
+  _uiPreviewMonth        = savedScheme + 1;  // so browsing Presets starts on the saved month, not always January
+
+  clearKeypadLeds();
+  _uiRenderAll();
+  DEBUG_PRINTLN("UI controller: initialized");
+}
+
+static inline void updateUiController() {
+  int keyIndex = pollKeypad();
+  if (keyIndex >= 0) {
+    if (keyIndex == KEY_INDEX_VERB) {
+      _uiHandleVerbKey();
+    } else if (keyIndex == KEY_INDEX_NOUN) {
+      if (_uiEntryState == UI_ENTRY_VERB && _uiVerbCode == 1) {
+        _uiEntryState    = UI_ENTRY_NOUN;
+        _uiNounHasDigits = false;
+        _uiRenderAll();
+      } else if (_uiEntryState == UI_ENTRY_IDLE) {
+        _uiShowHint("Press Verb (bottom)");
+        _uiRenderAll();
+      }
+      // else: noun pressed with an unresolved verb — ignored for now.
+    } else if (keyIsDigit(keyIndex)) {
+      _uiHandleDigit(keyDigitValue(keyIndex));
+    }
+  }
+
+  int delta = pollRotaryDelta();
+  if (delta != 0) {
+    if (_uiMenuState == UI_MENU_TOP) {
+      _uiTopHighlight = (_uiTopHighlight + delta) % 3;
+      if (_uiTopHighlight < 0) _uiTopHighlight += 3;
+    } else if (_uiMenuState == UI_MENU_PRESET_LIST) {
+      int month = ((_uiPreviewMonth - 1 + delta) % NUM_SCHEMES + NUM_SCHEMES) % NUM_SCHEMES + 1;
+      _uiPreviewMonth = month;
+      _uiUpdatePreview();
+    } else {  // UI_MENU_BRIGHTNESS
+      int brightness = _uiPendingBrightness + delta * BRIGHTNESS_STEP_PERCENT;
+      if (brightness < 0) brightness = 0;
+      if (brightness > 100) brightness = 100;
+      _uiPendingBrightness = brightness;
+      _uiUpdateBrightnessPreview();
+    }
+    _uiRenderAll();
+  }
+
+  if (rotaryPressed()) {
+    _uiConfirm();
+  }
+
+  // A transient hint auto-clears once it expires, even if nothing else
+  // triggers a render in the meantime.
+  if (_uiHintUntilMs != 0 && millis() >= _uiHintUntilMs) {
+    _uiHintUntilMs = 0;
+    _uiRenderMessage();
+  }
+}
