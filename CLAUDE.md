@@ -163,9 +163,9 @@ substitute for reading them):
 - `debug.h` — modular serial debug macros (see below)
 - `colors.h` — named NeoPixel color constants for the MacroPad's own keypad LEDs
 - `led_output.h` — **stub**, per-scheme outdoor rendering for the 12 monthly presets (the LED *type* is decided — WS2812B via the QT Py, see "Hardware architecture" — only each month's visual design is still pending)
-- `keypad_input.h` — reads the 12 MacroPad keys, debounced, returns a raw key index (0-11); `keyIsDigit()`/`keyDigitValue()`/`KEY_INDEX_VERB`/`KEY_INDEX_NOUN` give key semantics (pin numbers are a placeholder, not yet verified)
+- `keypad_input.h` — reads the 12 MacroPad keys, debounced, returns a raw key index (0-11); `keyIsDigit()`/`keyDigitValue()`/`KEY_INDEX_VERB`/`KEY_INDEX_NOUN` give key semantics (pin numbers confirmed against Adafruit's official pinout — see "Hardware architecture")
 - `rotary_input.h` — rotary encoder (decoded via the third-party `RotaryEncoder` library, `LatchMode::FOUR3`) + switch handling, both implemented; not yet verified against real hardware
-- `oled_display.h` — renders the 4-zone UI (menu/message/input) described in the UI/navigation design doc; top menu is Brightness/Presets/Custom/Test Pattern
+- `oled_display.h` — renders the 3-zone UI (menu/message/input) described in the UI/navigation design doc; top menu is Brightness/Presets/Custom/Test Pattern (4 items)
 - `keypad_leds.h` — drives the MacroPad's own 12 onboard NeoPixel LEDs under the keys (distinct from `led_output.h`'s outdoor LEDs); used as a live preview before a selection is confirmed, and for the Test Pattern diagnostic
 - `led_presets.h` — the 12 monthly scheme slots/names, active-scheme selection, and keypad-LED preview colors per scheme (`getSchemePreviewColors()` — prototype content, not the final outdoor design); per-scheme *outdoor* render logic is still a stub pending `led_output.h`
 - `settings_storage.h` — persists the active scheme + global brightness to flash via the arduino-pico core's built-in EEPROM emulation, restored on boot

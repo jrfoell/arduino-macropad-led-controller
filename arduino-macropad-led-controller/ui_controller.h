@@ -113,7 +113,7 @@ static inline void _uiRenderMessage() {
   } else if (_uiMenuState == UI_MENU_PRESET_LIST || _uiMenuState == UI_MENU_BRIGHTNESS) {
     renderMessage("Rotary Press: Confirm");
   } else if (_uiMenuState == UI_MENU_TEST_PATTERN) {
-    renderMessage("Verb: Exit");
+    renderMessage("Rotary Press: Exit");
   } else {
     renderMessage("");
   }
@@ -143,8 +143,13 @@ static inline void _uiRenderInput() {
   }
 }
 
+static TestPatternRenderState _uiTestPatternRenderState;
+
 static inline void _uiShowTestPatternKeypadPreview() {
   TestPatternPhase phase = testPatternPhaseAt(millis() - _uiTestPatternStartMs);
+  if (!testPatternPhaseChanged(&_uiTestPatternRenderState, phase)) {
+    return;
+  }
   uint32_t fullColor = (phase.color == TEST_PATTERN_COLOR_RED)   ? PIXEL_RED
                       : (phase.color == TEST_PATTERN_COLOR_GREEN) ? PIXEL_GREEN
                       :                                             PIXEL_BLUE;
@@ -156,6 +161,15 @@ static inline void _uiShowTestPatternKeypadPreview() {
   showKeypadLedColors(colors);  // scaled by LED_TEST_PATTERN_BRIGHTNESS_PERCENT, NOT _uiConfirmedBrightness — see the design doc
 }
 
+// Shared by _uiConfirm() and the <verb>-key handler in updateUiController()
+// — both exit Test Pattern the same way.
+static inline void _uiExitTestPattern() {
+  stopTestPatternOnQtpy();
+  clearKeypadLeds();
+  _uiMenuState   = UI_MENU_TOP;
+  _uiHintUntilMs = 0;
+}
+
 static inline void _uiRenderAll() {
   _uiRenderMenu();
   _uiRenderMessage();
@@ -164,10 +178,7 @@ static inline void _uiRenderAll() {
 
 static inline void _uiConfirm() {
   if (_uiMenuState == UI_MENU_TEST_PATTERN) {
-    stopTestPatternOnQtpy();
-    clearKeypadLeds();
-    _uiMenuState   = UI_MENU_TOP;
-    _uiHintUntilMs = 0;
+    _uiExitTestPattern();
   } else if (_uiMenuState == UI_MENU_PRESET_LIST) {
     setActiveScheme(_uiPreviewMonth - 1);
     saveSettings(getActiveScheme(), _uiConfirmedBrightness);
@@ -196,9 +207,11 @@ static inline void _uiConfirm() {
     } else if (_uiTopHighlight == 2) {
       _uiShowHint("Custom: not built yet");
     } else {
-      if (startTestPatternOnQtpy()) {
+      QtpyLinkResult result = startTestPatternOnQtpy();
+      if (result == QTPY_LINK_OK) {
         _uiMenuState          = UI_MENU_TEST_PATTERN;
         _uiTestPatternStartMs = millis();
+        testPatternResetRenderState(&_uiTestPatternRenderState);
         // A stale UI_ENTRY_VERB from before descending here (e.g. <verb>
         // pressed, then rotated onto Test Pattern without a digit) would
         // let a subsequent digit key fall into _uiHandleDigit()'s verb
@@ -207,8 +220,10 @@ static inline void _uiConfirm() {
         // re-entering verb entry while it's active, idling this here is
         // sufficient to keep it idle for the whole run.
         _uiEntryState = UI_ENTRY_IDLE;
+      } else if (result == QTPY_LINK_NO_RESPONSE) {
+        _uiShowHint("QT Py: no response");
       } else {
-        _uiShowHint("QT Py: no ACK");
+        _uiShowHint("QT Py: bad ACK byte");
       }
     }
   }
@@ -279,10 +294,7 @@ static inline void updateUiController() {
   if (keyIndex >= 0) {
     if (keyIndex == KEY_INDEX_VERB) {
       if (_uiMenuState == UI_MENU_TEST_PATTERN) {
-        stopTestPatternOnQtpy();
-        clearKeypadLeds();
-        _uiMenuState   = UI_MENU_TOP;
-        _uiHintUntilMs = 0;
+        _uiExitTestPattern();
         _uiRenderAll();
       } else {
         _uiHandleVerbKey();

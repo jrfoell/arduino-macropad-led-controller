@@ -20,10 +20,10 @@
 //   keyDigitValue(keyIndex)   — the digit 0-9 a digit key index represents
 //   KEY_INDEX_VERB/KEY_INDEX_NOUN — the two non-numeric key indices
 //
-// TODO: KEY_PINS below is a placeholder (1-12). Confirm the actual Arduino
-// pin numbers/constants for the 12 key switches against the "Adafruit
-// MacroPad RP2040" board variant header once the arduino-pico core is
-// installed — see CLAUDE.md's "Not yet verified" notes.
+// KEY_PINS (1-12) is confirmed against Adafruit's official MacroPad RP2040
+// pinout diagram (adafruit/Adafruit-MacroPad-RP2040-PCB on GitHub), pulled
+// while researching the outdoor LED driver architecture — see
+// docs/superpowers/specs/2026-10-23-outdoor-led-driver-architecture-design.md.
 
 #pragma once
 

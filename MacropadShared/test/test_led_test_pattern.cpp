@@ -21,10 +21,26 @@ int main() {
     assert(p.evenParityLit == c.evenParityLit);
   }
 
-  // millis() rollover (~49.7 days) must not glitch the calculation —
-  // unsigned division/modulo wraps correctly, but pin it with a real case.
-  TestPatternPhase nearWrap = testPatternPhaseAt(ULONG_MAX);
-  (void)nearWrap;  // just must not crash/UB; exact phase at this instant isn't load-bearing
+  // millis() rollover (~49.7 days on the real 32-bit `unsigned long` target
+  // — this test host's `unsigned long` may be wider, so pin the actual
+  // 32-bit max rather than relying on ULONG_MAX, and check a real value
+  // rather than just "doesn't crash."
+  TestPatternPhase nearWrap = testPatternPhaseAt(0xFFFFFFFFUL);
+  assert(nearWrap.color == TEST_PATTERN_COLOR_GREEN);  // 0xFFFFFFFF/5000 % 6 == 3 -> GREEN-even
+  assert(nearWrap.evenParityLit == true);
+
+  // The property that actually matters to callers: `millis() - startMs`
+  // (see qtpy_led_driver.ino / ui_controller.h) must keep producing the
+  // correct elapsed time across the wrap, via plain unsigned subtraction.
+  // Modeled with explicit uint32_t so this host's possibly-wider
+  // `unsigned long` doesn't mask the 32-bit wraparound being tested.
+  uint32_t startMs         = 0xFFFFFFF0UL;         // 16ms before the wrap
+  uint32_t afterWrapMillis = 184UL;                // millis() 200ms later, now wrapped
+  uint32_t elapsed         = (uint32_t)(afterWrapMillis - startMs);
+  assert(elapsed == 200);
+  TestPatternPhase afterWrap = testPatternPhaseAt(elapsed);
+  assert(afterWrap.color == TEST_PATTERN_COLOR_RED);  // 200ms in: still the first phase
+  assert(afterWrap.evenParityLit == false);
 
   // Every-other-LED lighting
   assert(testPatternLedIsLit(0, /*evenParityLit=*/true)  == true);

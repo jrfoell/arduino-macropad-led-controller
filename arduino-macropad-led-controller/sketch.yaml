@@ -22,7 +22,8 @@ profiles:
       - platform: rp2040:rp2040 (6.0.0)
         platform_index_url: https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
     libraries:
-      # Onboard MacroPad NeoPixels + (possibly) outdoor LEDs — keypad_leds.h, led_presets.h
+      # Onboard MacroPad NeoPixels — keypad_leds.h, led_presets.h (the
+      # outdoor WS2812B strips live on the QT Py sketch instead)
       - Adafruit NeoPixel (1.15.5)
       # 128x64 SH1106G OLED — oled_display.h
       - Adafruit SH110X (2.1.14)

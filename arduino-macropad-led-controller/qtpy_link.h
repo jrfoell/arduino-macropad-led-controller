@@ -5,19 +5,27 @@
 //
 // Exposes:
 //   initQtpyLink()           — call once in setup()
-//   startTestPatternOnQtpy() — returns true only if the QT Py ACKed; false
-//                              on a failed transmission or a missing/wrong
-//                              ACK byte, so the caller can detect a dead
-//                              link instead of assuming it started. On any
-//                              ACK failure, also sends Stop first — a Start
-//                              that reached the QT Py but whose ACK didn't
-//                              reach us must not leave it running unseen.
+//   QtpyLinkResult           — startTestPatternOnQtpy()'s result, so the UI
+//                              can distinguish *why* it failed:
+//                                QTPY_LINK_OK           — ACKed, started
+//                                QTPY_LINK_NO_RESPONSE  — the transmission
+//                                  failed, or nothing came back at all on
+//                                  request — likely wiring/power
+//                                QTPY_LINK_BAD_ACK      — a response came
+//                                  back but didn't match — likely a
+//                                  firmware/protocol mismatch, not wiring
+//   startTestPatternOnQtpy() — see QtpyLinkResult. On either failure, also
+//                              sends Stop first — a Start that reached the
+//                              QT Py but whose ACK didn't reach us must not
+//                              leave it running unseen.
 //   stopTestPatternOnQtpy()  — fire-and-forget, no response expected
 
 #pragma once
 #include <Wire.h>
 #include "debug.h"
 #include "i2c_protocol.h"  // from MacropadShared
+
+enum QtpyLinkResult { QTPY_LINK_OK, QTPY_LINK_NO_RESPONSE, QTPY_LINK_BAD_ACK };
 
 static inline void initQtpyLink() {
   Wire.begin();
@@ -30,21 +38,25 @@ static inline void stopTestPatternOnQtpy() {
   Wire.endTransmission();
 }
 
-static inline bool startTestPatternOnQtpy() {
+static inline QtpyLinkResult startTestPatternOnQtpy() {
   Wire.beginTransmission(QTPY_I2C_ADDRESS);
   Wire.write(QTPY_CMD_START);
   if (Wire.endTransmission() != 0) {
-    return false;
+    return QTPY_LINK_NO_RESPONSE;
   }
 
   Wire.requestFrom(QTPY_I2C_ADDRESS, 1);
-  if (Wire.available() < 1 || Wire.read() != QTPY_ACK_BYTE) {
+  if (Wire.available() < 1) {
     // The QT Py may have already received and acted on the Start even
-    // though we can't confirm it (a dropped ACK read, not a dropped Start)
+    // though we can't confirm it (a dropped response, not a dropped Start)
     // — send Stop so a half-succeeded Start can't leave the strips running
     // with no UI anywhere aware of it.
     stopTestPatternOnQtpy();
-    return false;
+    return QTPY_LINK_NO_RESPONSE;
   }
-  return true;
+  if (Wire.read() != QTPY_ACK_BYTE) {
+    stopTestPatternOnQtpy();
+    return QTPY_LINK_BAD_ACK;
+  }
+  return QTPY_LINK_OK;
 }

@@ -22,5 +22,5 @@
 #include "debug.h"
 
 static inline void initLedOutput() {
-  DEBUG_PRINTLN("LED output: not yet implemented (LED type undecided)");
+  DEBUG_PRINTLN("LED output: per-scheme rendering not yet implemented (LED type is decided: WS2812B via the QT Py)");
 }
