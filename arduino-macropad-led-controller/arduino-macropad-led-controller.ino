@@ -1,18 +1,13 @@
 // arduino-macropad-led-controller.ino
-// Adafruit MacroPad RP2040 + Adafruit MCP23017 I2C GPIO Expander (STEMMA QT)
+// Adafruit MacroPad RP2040 + a QT Py RP2040 companion controller (STEMMA QT)
 // Drives an outdoor LED installation with 12 monthly preset lighting schemes.
 
 // ─── Debug ───────────────────────────────────────────────────────────────────
 // Uncomment to enable serial debug output. Must appear before all #includes.
 #define DEBUG_SERIAL
 
-// ─── Hardware feature flags ──────────────────────────────────────────────────
-// Uncomment when the MCP23017 GPIO expander is physically attached via STEMMA QT.
-//#define HARDWARE_GPIO_EXPANDER
-
 #include "debug.h"
 #include "colors.h"
-#include "gpio_expander.h"
 #include "led_output.h"
 #include "keypad_input.h"
 #include "rotary_input.h"
@@ -25,9 +20,6 @@
 // ─── Setup ───────────────────────────────────────────────────────────────────
 void setup() {
   DEBUG_BEGIN(115200);
-
-  DEBUG_PRINTLN("Initializing GPIO expander");
-  initGpioExpander();
 
   DEBUG_PRINTLN("Initializing keypad");
   initKeypad();

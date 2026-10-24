@@ -3,11 +3,14 @@
 // audience sees — as opposed to the MacroPad's own onboard NeoPixel
 // indicators (colors.h).
 //
-// STUB: the physical LED type/protocol for the outdoor run has not been
-// decided yet (see "Open design questions" in CLAUDE.md — addressable
-// strips like WS2812/NeoPixel vs. simple on/off circuits or relays driven
-// via the MCP23017 GPIO expander, see gpio_expander.h). Nothing here drives
-// real hardware until that decision is made.
+// STUB: the LED type/protocol question is now decided — WS2812B strips,
+// driven by a QT Py RP2040 companion controller over I2C (see
+// docs/superpowers/specs/2026-10-23-outdoor-led-driver-architecture-design.md)
+// rather than anything on this board's own GPIO. That companion
+// controller's "Test Pattern" diagnostic mode is implemented
+// (see qtpy_link.h, ui_controller.h); per-scheme rendering of the 12
+// monthly presets onto the real strips is still unbuilt, pending each
+// month's visual design (see CLAUDE.md's "Open design questions").
 //
 // Exposes (planned):
 //   initLedOutput()  — call once in setup()

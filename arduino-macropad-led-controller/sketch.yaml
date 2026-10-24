@@ -33,10 +33,5 @@ profiles:
       - Adafruit BusIO (1.17.4)
       # Rotary encoder decoding (LatchMode::FOUR3) — rotary_input.h
       - RotaryEncoder (1.6.0)
-      # MCP23017 I2C GPIO expander — gpio_expander.h. Only actually used
-      # when HARDWARE_GPIO_EXPANDER is defined in the .ino, but listed
-      # unconditionally since sketch.yaml has no concept of the sketch's
-      # compile-time feature flags.
-      - Adafruit MCP23017 Arduino Library (2.3.2)
 
 default_profile: macropad
