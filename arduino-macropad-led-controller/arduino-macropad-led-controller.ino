@@ -15,6 +15,7 @@
 #include "keypad_leds.h"
 #include "led_presets.h"
 #include "settings_storage.h"
+#include "qtpy_link.h"
 #include "ui_controller.h"
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
@@ -38,6 +39,9 @@ void setup() {
 
   DEBUG_PRINTLN("Initializing settings storage");
   initSettingsStorage();
+
+  DEBUG_PRINTLN("Initializing QT Py link");
+  initQtpyLink();
 
   DEBUG_PRINTLN("Initializing UI controller");
   initUiController();

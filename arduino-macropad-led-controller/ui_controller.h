@@ -43,20 +43,23 @@
 #include "keypad_leds.h"
 #include "led_presets.h"
 #include "settings_storage.h"
+#include <led_test_pattern.h>
+#include "qtpy_link.h"
 
 #define UI_HINT_DURATION_MS 2000
 #define BRIGHTNESS_STEP_PERCENT 5  // per felt detent; 20 detents/rev * 5% = 100%/rev
 
-enum UiMenuState  { UI_MENU_TOP, UI_MENU_PRESET_LIST, UI_MENU_BRIGHTNESS };
+enum UiMenuState  { UI_MENU_TOP, UI_MENU_PRESET_LIST, UI_MENU_BRIGHTNESS, UI_MENU_TEST_PATTERN };
 enum UiEntryState { UI_ENTRY_IDLE, UI_ENTRY_VERB, UI_ENTRY_NOUN };
 
 static UiMenuState  _uiMenuState  = UI_MENU_TOP;
 static UiEntryState _uiEntryState = UI_ENTRY_IDLE;
 
-static int _uiTopHighlight   = 0;      // 0=Brightness, 1=Presets, 2=Custom
+static int _uiTopHighlight   = 0;      // 0=Brightness, 1=Presets, 2=Custom, 3=Test Pattern
 static int _uiVerbCode       = -1;     // -1 = no digit entered yet this verb session
 static int _uiPreviewMonth   = 1;      // 1-12, shared by rotary browse + noun digit entry
 static bool _uiNounHasDigits = false;  // has at least one digit been typed this noun session
+static unsigned long _uiTestPatternStartMs = 0;
 
 // Overwritten from flash in initUiController() (see settings_storage.h) —
 // these initializers are just the pre-boot default.
@@ -97,6 +100,8 @@ static inline void _uiRenderMenu() {
     renderMenuTop(_uiTopHighlight);
   } else if (_uiMenuState == UI_MENU_PRESET_LIST) {
     renderMenuPresetList(_uiPreviewMonth, SCHEME_NAMES, NUM_SCHEMES);
+  } else if (_uiMenuState == UI_MENU_TEST_PATTERN) {
+    renderMenuTestPattern();
   } else {
     renderMenuBrightness(_uiPendingBrightness);
   }
@@ -107,6 +112,8 @@ static inline void _uiRenderMessage() {
     renderMessage(_uiHintText);
   } else if (_uiMenuState == UI_MENU_PRESET_LIST || _uiMenuState == UI_MENU_BRIGHTNESS) {
     renderMessage("Rotary Press: Confirm");
+  } else if (_uiMenuState == UI_MENU_TEST_PATTERN) {
+    renderMessage("Verb: Exit");
   } else {
     renderMessage("");
   }
@@ -136,6 +143,19 @@ static inline void _uiRenderInput() {
   }
 }
 
+static inline void _uiShowTestPatternKeypadPreview() {
+  TestPatternPhase phase = testPatternPhaseAt(millis() - _uiTestPatternStartMs);
+  uint32_t fullColor = (phase.color == TEST_PATTERN_COLOR_RED)   ? PIXEL_RED
+                      : (phase.color == TEST_PATTERN_COLOR_GREEN) ? PIXEL_GREEN
+                      :                                             PIXEL_BLUE;
+  uint32_t color = scaleColorBrightness(fullColor, LED_TEST_PATTERN_BRIGHTNESS_PERCENT);
+  uint32_t colors[NUM_NEOPIXEL];
+  for (uint8_t i = 0; i < NUM_NEOPIXEL; i++) {
+    colors[i] = testPatternLedIsLit(i, phase.evenParityLit) ? color : PIXEL_OFF;
+  }
+  showKeypadLedColors(colors);  // scaled by LED_TEST_PATTERN_BRIGHTNESS_PERCENT, NOT _uiConfirmedBrightness — see the design doc
+}
+
 static inline void _uiRenderAll() {
   _uiRenderMenu();
   _uiRenderMessage();
@@ -143,7 +163,12 @@ static inline void _uiRenderAll() {
 }
 
 static inline void _uiConfirm() {
-  if (_uiMenuState == UI_MENU_PRESET_LIST) {
+  if (_uiMenuState == UI_MENU_TEST_PATTERN) {
+    stopTestPatternOnQtpy();
+    clearKeypadLeds();
+    _uiMenuState   = UI_MENU_TOP;
+    _uiHintUntilMs = 0;
+  } else if (_uiMenuState == UI_MENU_PRESET_LIST) {
     setActiveScheme(_uiPreviewMonth - 1);
     saveSettings(getActiveScheme(), _uiConfirmedBrightness);
     clearKeypadLeds();
@@ -168,8 +193,15 @@ static inline void _uiConfirm() {
     } else if (_uiTopHighlight == 1) {
       _uiMenuState = UI_MENU_PRESET_LIST;
       _uiUpdatePreview();
-    } else {
+    } else if (_uiTopHighlight == 2) {
       _uiShowHint("Custom: not built yet");
+    } else {
+      if (startTestPatternOnQtpy()) {
+        _uiMenuState          = UI_MENU_TEST_PATTERN;
+        _uiTestPatternStartMs = millis();
+      } else {
+        _uiShowHint("QT Py: no ACK");
+      }
     }
   }
   _uiRenderAll();
@@ -238,7 +270,15 @@ static inline void updateUiController() {
   int keyIndex = pollKeypad();
   if (keyIndex >= 0) {
     if (keyIndex == KEY_INDEX_VERB) {
-      _uiHandleVerbKey();
+      if (_uiMenuState == UI_MENU_TEST_PATTERN) {
+        stopTestPatternOnQtpy();
+        clearKeypadLeds();
+        _uiMenuState   = UI_MENU_TOP;
+        _uiHintUntilMs = 0;
+        _uiRenderAll();
+      } else {
+        _uiHandleVerbKey();
+      }
     } else if (keyIndex == KEY_INDEX_NOUN) {
       if (_uiEntryState == UI_ENTRY_VERB && _uiVerbCode == 1) {
         _uiEntryState    = UI_ENTRY_NOUN;
@@ -257,12 +297,14 @@ static inline void updateUiController() {
   int delta = pollRotaryDelta();
   if (delta != 0) {
     if (_uiMenuState == UI_MENU_TOP) {
-      _uiTopHighlight = (_uiTopHighlight + delta) % 3;
-      if (_uiTopHighlight < 0) _uiTopHighlight += 3;
+      _uiTopHighlight = (_uiTopHighlight + delta) % 4;
+      if (_uiTopHighlight < 0) _uiTopHighlight += 4;
     } else if (_uiMenuState == UI_MENU_PRESET_LIST) {
       int month = ((_uiPreviewMonth - 1 + delta) % NUM_SCHEMES + NUM_SCHEMES) % NUM_SCHEMES + 1;
       _uiPreviewMonth = month;
       _uiUpdatePreview();
+    } else if (_uiMenuState == UI_MENU_TEST_PATTERN) {
+      // no-op — nothing to adjust while Test Pattern is running
     } else {  // UI_MENU_BRIGHTNESS
       int brightness = _uiPendingBrightness + delta * BRIGHTNESS_STEP_PERCENT;
       if (brightness < 0) brightness = 0;
@@ -282,5 +324,9 @@ static inline void updateUiController() {
   if (_uiHintUntilMs != 0 && millis() >= _uiHintUntilMs) {
     _uiHintUntilMs = 0;
     _uiRenderMessage();
+  }
+
+  if (_uiMenuState == UI_MENU_TEST_PATTERN) {
+    _uiShowTestPatternKeypadPreview();
   }
 }

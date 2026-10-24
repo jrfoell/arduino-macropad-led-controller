@@ -33,5 +33,9 @@ profiles:
       - Adafruit BusIO (1.17.4)
       # Rotary encoder decoding (LatchMode::FOUR3) — rotary_input.h
       - RotaryEncoder (1.6.0)
+      # Shared test-pattern sequencing + I2C protocol constants (not a
+      # Library Manager package — local dir reference) — ui_controller.h,
+      # qtpy_link.h
+      - dir: ../MacropadShared
 
 default_profile: macropad
