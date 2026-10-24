@@ -4,28 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-The sketch is scaffolded and partially functional. `arduino-macropad-led-controller.ino`
-wires together the headers below. The verb/noun/menu UI's "Brightness" and
+This is now a **monorepo** of two Arduino sketches plus one shared local
+library — see "Repo structure" below. The MacroPad sketch
+(`arduino-macropad-led-controller/arduino-macropad-led-controller.ino`)
+wires together its headers. The verb/noun/menu UI's "Brightness" and
 "Presets" branches (rotary knob scroll via the third-party `RotaryEncoder`
 library + `<verb>`/`<noun>`/digit entry, OLED rendering, keypad-LED preview)
 are implemented as a first coding-pass prototype — see `ui_controller.h` and
 `docs/superpowers/specs/2026-08-02-ui-navigation-design.md`. The active
 preset and global brightness are persisted across power cycles via flash
 (EEPROM emulation, see `settings_storage.h`). Still stubbed: the
-"Custom"/pattern-verb branch, and the actual outdoor LED output (type not
-yet decided; see "Open design questions" further down) — so a saved
-brightness/preset selection isn't yet reflected on real outdoor hardware,
-only restored into the UI's own state. There is now a `sketch.yaml`
-(Arduino CLI's per-sketch project file — not `arduino-cli.yaml`, which is
-that tool's separate *global* config) declaring the board FQBN and expected
-libraries, but it's unverified against a live install (its own top comment
-explains what to double-check first) and there's still no test setup. None
-of this has been compiled against real board/library packages yet, so
-verify library API calls (e.g. `Adafruit_MCP23X17`, `Adafruit_SH1106G`
-constructor args, `Adafruit_NeoPixel::ColorHSV`, `RotaryEncoder`,
-`EEPROM.begin()`/`commit()`) against the installed library versions before
-trusting them, and expect the rotary direction (CW vs CCW) to possibly need
-swapping once tested against real hardware.
+"Custom"/pattern-verb branch, and per-scheme rendering of the 12 monthly
+presets onto the real outdoor strips (the LED *type* question itself is
+resolved — see "Hardware architecture" — but each month's visual design
+isn't; see "Open design questions"). A fourth menu item, **"Test Pattern"**,
+*is* fully implemented end to end: it commands the QT Py companion
+controller over I2C to run a diagnostic RGB/odd-even cycle across both
+outdoor strips and the MacroPad's own keypad LEDs in sync — see
+`docs/superpowers/specs/2026-10-23-outdoor-led-driver-architecture-design.md`.
+
+Each sketch has its own `sketch.yaml` (Arduino CLI's per-sketch project
+file — not `arduino-cli.yaml`, which is that tool's separate *global*
+config). Both sketches, and `MacropadShared`'s own `g++`-based test suite,
+have been **compiled and run for real** against an installed `arduino-cli`
+(see "Working in this repo" for the gotchas that took to get there — in
+particular, this `arduino-cli` version requires an explicit version on
+every `sketch.yaml` profile `libraries:`/`platforms:` entry, and always
+use `--profile`, never bare `--fqbn`). Still unverified against real
+hardware: the rotary direction (CW vs CCW) may need swapping, and the QT
+Py's two outdoor-strip GPIO pins (`STRIP_A_PIN`/`STRIP_B_PIN` in
+`qtpy_led_driver/outdoor_leds.h`) are placeholders pending real wiring.
 
 ## Project goal
 
@@ -58,23 +66,27 @@ Adafruit's official MacroPad documentation/examples default to CircuitPython.
 - One **STEMMA QT** connector: a dedicated I2C bus with built-in 10k pull-ups,
   separate from any other I2C on the board
 
-**Adafruit MCP23017 I2C GPIO Expander** ([product](https://www.adafruit.com/product/5346), [learn guide](https://learn.adafruit.com/adafruit-mcp23017-i2c-gpio-expander)), connected to the MacroPad via STEMMA QT, provides the actual outdoor-facing GPIO:
-- 16-bit I2C GPIO expander, works at 3V or 5V logic/power
-- Default I2C address `0x20`; three address pins (A0/A1/A2) allow up to 8 devices
-  on one bus (`0x20`–`0x27`) if the installation grows to need more than 16 pins
-- Two STEMMA QT connectors on the breakout allow chaining further STEMMA QT
-  devices, but **STEMMA QT only carries I2C (SDA/SCL) + power — no GPIO
-  pass-through**
-- Each of the 16 GPIO pins can source/sink up to **25mA** — enough to directly
-  drive a single LED (with resistor) or a low-current relay/opto module input,
-  but higher-current LED strips or larger relay coils will need a
-  transistor/MOSFET driver stage rather than a direct connection
-- Built-in interrupt support (`setupInterrupts()`, `setupInterruptPin()`, etc.)
-  if the design ever needs interrupt-driven inputs rather than polling
+**Outdoor LEDs**: two **WS2812B addressable strips** (BTF-Lighting "ECO,"
+30 LEDs/m — 18m/540 LEDs and 12m/360 LEDs). WS2812B needs a precisely-timed
+PIO-driven serial data line, which the MacroPad's own GPIO can't supply (its
+only expansion point, STEMMA QT, is a fixed-function I2C bus — see below) —
+so an **Adafruit QT Py RP2040** companion controller sits on that STEMMA QT
+bus, powered over the same cable (its connector's `V+` pin ties directly to
+the board's own 3.3V rail), and drives the two strips from its own
+PIO-capable GPIO pins on command from the MacroPad over I2C (MacroPad as
+host on `Wire`, QT Py as peripheral on `Wire1` — its STEMMA QT connector is
+wired to `Wire1`, not the default `Wire`). The strips feed a **QuinLED
+Diff-Adv Sender-4**, converting to a differential RS-485 signal over CAT
+cable to two daisy-chained **QuinLED Diff-Adv Receiver Midpoint-1** units
+near the installation, each locally power-injected from a 24V supply via
+its own 24V→5V buck converter. Full signal/power-chain diagram, the
+power-budget math behind the "Test Pattern" diagnostic mode, and everything
+this paragraph compresses: see
+`docs/superpowers/specs/2026-10-23-outdoor-led-driver-architecture-design.md`.
 
-**Not yet verified**: the exact Arduino pin/constant names for the MacroPad's
-STEMMA QT SDA/SCL lines (likely just `SDA`/`SCL` via the default `Wire`
-instance, but confirm against the board variant header before relying on it).
+**Not yet verified**: the QT Py's two outdoor-strip GPIO pin assignments
+against real wiring (see "Project state"); the MacroPad's own 3.3V
+regulator headroom for also powering the QT Py over STEMMA QT.
 
 ## Arduino toolchain setup
 
@@ -88,18 +100,36 @@ instance, but confirm against the board variant header before relying on it).
   manually with the libraries below rather than through one unified
   MacroPad object
 
+## Repo structure
+
+This is a **monorepo** holding two Arduino sketches plus one shared local
+library, as three sibling folders under the repo root (`CLAUDE.md` and
+`docs/` stay at the true repo root, since they're project-wide, not
+sketch-specific):
+
+- `arduino-macropad-led-controller/` — the MacroPad sketch (moved into its
+  own folder rather than living at the repo root, so it explicitly
+  satisfies Arduino's one-sketch-one-folder rule rather than relying on
+  the repo's own folder name happening to match)
+- `qtpy_led_driver/` — the QT Py companion controller's sketch
+- `MacropadShared/` — a local Arduino library (`library.properties` +
+  `src/`) holding hardware-agnostic logic both sketches need — currently
+  the Test Pattern sequencing and the I2C command-byte constants; it also
+  has its own `g++`-based test suite (`MacropadShared/test/`), since that
+  code has no Arduino dependency
+
+Each sketch's `sketch.yaml` references `MacropadShared` as a local `dir:`
+entry (`- dir: ../MacropadShared`) rather than a Library Manager package.
+See `docs/superpowers/specs/2026-10-23-outdoor-led-driver-architecture-design.md`
+for why this structure exists.
+
 ## Expected libraries
 
-- `Adafruit NeoPixel` — onboard MacroPad indicator LEDs (and possibly the
-  outdoor LEDs themselves, depending on what LED type is chosen for the
-  installation — not yet decided)
+- `Adafruit NeoPixel` — onboard MacroPad indicator LEDs (`keypad_leds.h`)
+  and, in the QT Py sketch, the two outdoor WS2812B strips (`outdoor_leds.h`)
 - `Adafruit SH110X` — drives the 128x64 OLED (`Adafruit_SH1106G`)
 - `RotaryEncoder` (third-party, by mathertel) — decodes the MacroPad's
   rotary encoder; used with `LatchMode::FOUR3`, see `rotary_input.h`
-- `Adafruit-MCP23017-Arduino-Library` (GitHub: `adafruit/Adafruit-MCP23017-Arduino-Library`)
-  — core class `Adafruit_MCP23XXX`, device subclass `Adafruit_MCP23X17`; API
-  mirrors standard Arduino (`pinMode`, `digitalWrite`, `digitalRead` on pins
-  0–15, e.g. GPB0 = pin 8)
 - `EEPROM` — **not** a separate Library Manager install; bundled with the
   arduino-pico board core itself (mirrors the ESP8266 core's emulated-EEPROM
   API: `begin()`/`read()`/`write()`/`commit()`). Used by `settings_storage.h`
@@ -132,15 +162,20 @@ its exact responsibility and exposed API — this list is a summary, not a
 substitute for reading them):
 - `debug.h` — modular serial debug macros (see below)
 - `colors.h` — named NeoPixel color constants for the MacroPad's own keypad LEDs
-- `gpio_expander.h` — MCP23017 init + pin read/write wrappers for the outdoor-facing GPIO; safe no-ops when `HARDWARE_GPIO_EXPANDER` is undefined
-- `led_output.h` — **stub**, drives whatever LED hardware the outdoor installation ends up using (type not yet decided)
+- `led_output.h` — **stub**, per-scheme outdoor rendering for the 12 monthly presets (the LED *type* is decided — WS2812B via the QT Py, see "Hardware architecture" — only each month's visual design is still pending)
 - `keypad_input.h` — reads the 12 MacroPad keys, debounced, returns a raw key index (0-11); `keyIsDigit()`/`keyDigitValue()`/`KEY_INDEX_VERB`/`KEY_INDEX_NOUN` give key semantics (pin numbers are a placeholder, not yet verified)
 - `rotary_input.h` — rotary encoder (decoded via the third-party `RotaryEncoder` library, `LatchMode::FOUR3`) + switch handling, both implemented; not yet verified against real hardware
-- `oled_display.h` — renders the 3-zone UI (menu/message/input) described in the UI/navigation design doc
-- `keypad_leds.h` — drives the MacroPad's own 12 onboard NeoPixel LEDs under the keys (distinct from `led_output.h`'s outdoor LEDs); used as a live preview before a selection is confirmed
+- `oled_display.h` — renders the 4-zone UI (menu/message/input) described in the UI/navigation design doc; top menu is Brightness/Presets/Custom/Test Pattern
+- `keypad_leds.h` — drives the MacroPad's own 12 onboard NeoPixel LEDs under the keys (distinct from `led_output.h`'s outdoor LEDs); used as a live preview before a selection is confirmed, and for the Test Pattern diagnostic
 - `led_presets.h` — the 12 monthly scheme slots/names, active-scheme selection, and keypad-LED preview colors per scheme (`getSchemePreviewColors()` — prototype content, not the final outdoor design); per-scheme *outdoor* render logic is still a stub pending `led_output.h`
 - `settings_storage.h` — persists the active scheme + global brightness to flash via the arduino-pico core's built-in EEPROM emulation, restored on boot
-- `ui_controller.h` — the verb/noun/menu state machine tying keypad + rotary input + OLED + keypad LEDs + `led_presets.h` + `settings_storage.h` together; implements the flow in `docs/superpowers/specs/2026-08-02-ui-navigation-design.md` (currently: Brightness and Presets branches — Custom/pattern verbs not yet implemented; Brightness is rotary-only, no keypad path yet)
+- `qtpy_link.h` — MacroPad-side (I2C host) Start/Stop Test Pattern commands to the QT Py LED driver, with ACK-based dead-link detection on Start
+- `ui_controller.h` — the verb/noun/menu state machine tying keypad + rotary input + OLED + keypad LEDs + `led_presets.h` + `settings_storage.h` + `qtpy_link.h` together; implements the flow in `docs/superpowers/specs/2026-08-02-ui-navigation-design.md` (Brightness, Presets, and Test Pattern branches implemented — Custom/pattern verbs not yet; Brightness is rotary-only, Test Pattern is OLED-menu-only, neither has a keypad path)
+- `MacropadShared/src/led_test_pattern.h` — hardware-agnostic Test Pattern color/parity/phase sequencing, shared by both sketches (has a real `g++`-based test suite, no Arduino dependency)
+- `MacropadShared/src/i2c_protocol.h` — the Start/Stop/ACK command-byte constants both sketches agree on
+- `qtpy_led_driver/outdoor_leds.h` — drives the two outdoor WS2812B strips from the QT Py's own GPIO, rendering the Test Pattern sequence
+- `qtpy_led_driver/i2c_commands.h` — QT Py-side (I2C peripheral on `Wire1`) Start/Stop command handling + ACK response
+- `qtpy_led_driver/debug.h` — same modular debug macros as the MacroPad's `debug.h`, copied verbatim (each sketch needs its own copy; see `docs/superpowers/plans/2026-10-23-outdoor-led-driver-architecture.md`'s Task 4 for why it isn't shared via `MacropadShared` instead)
 
 **Modular serial debugging**: mirror `arduino-midi-3-pedal/debug.h` exactly —
 a single `DEBUG_SERIAL` macro, defined (or left commented out) in the `.ino`
@@ -164,7 +199,7 @@ rather than being ripped out before "release."
 
 **Optional-hardware feature flags**: if any hardware on this build is
 sometimes physically absent (e.g. testing the keypad/rotary logic before the
-MCP23017 is wired up), gate it the same way `arduino-midi-3-pedal` gates
+QT Py companion controller is wired up), gate it the same way `arduino-midi-3-pedal` gates
 `HARDWARE_MIDI`/`HARDWARE_USB` — a `#define HARDWARE_xxx` near the top of the
 `.ino`, checked with `#ifdef` in the relevant header, with a same-signature
 no-op macro fallback so call sites in the `.ino`/other headers never need
@@ -179,9 +214,12 @@ worked examples).
 ## Open design questions
 
 These haven't been decided yet — check with the user before assuming an answer:
-- What LED type/protocol drives the actual outdoor installation (addressable
-  strips like WS2812/NeoPixel vs. simple on/off circuits via MCP23017 GPIO vs.
-  relays for higher-power fixtures)?
+- ~~What LED type/protocol drives the actual outdoor installation~~ —
+  **resolved**: addressable WS2812B strips, driven by a QT Py RP2040
+  companion controller over I2C and a QuinLED Diff-Adv differential signal
+  chain (not anything on the MacroPad's own GPIO or an MCP23017). See
+  "Hardware architecture" above and
+  `docs/superpowers/specs/2026-10-23-outdoor-led-driver-architecture-design.md`.
 - What the 12 monthly themes/schemes actually are, and what "significant"
   event each month celebrates
 - How presets are selected/stored (key press → immediate switch? rotary knob
@@ -190,9 +228,21 @@ These haven't been decided yet — check with the user before assuming an answer
 
 ## Working in this repo
 
-- There is no established build/upload/lint/test tooling yet. If asked to build
-  or upload, confirm `arduino-cli` or Arduino IDE is set up with the board core
-  above, and confirm the port before assuming one.
+- `arduino-cli` is confirmed working in at least one dev environment, compiling
+  both sketches for real. Compile with
+  `arduino-cli compile --profile <macropad|qtpy> <sketch-dir>` —
+  **always `--profile`, never bare `--fqbn`**: a `sketch.yaml`'s mere
+  presence in a sketch directory makes `arduino-cli` auto-engage profile
+  resolution regardless of which flags are passed, so bare `--fqbn` fails
+  the same way an unversioned `--profile` does. That version requires an
+  explicit version on every profile `libraries:`/`platforms:` entry
+  (`Name (version)` syntax, checked via `arduino-cli lib list`/`core
+  list`) — a bare, unversioned name doesn't resolve even when that exact
+  library is already installed. `MacropadShared` has a real test suite
+  (`g++ -std=c++11 -I MacropadShared/src MacropadShared/test/test_led_test_pattern.cpp -o /tmp/t && /tmp/t`)
+  since it has no Arduino dependency; still confirm `arduino-cli`/Arduino
+  IDE is set up before building or uploading on a *different* machine, and
+  confirm the port before assuming one.
 - Favor plain, idiomatic Arduino C++ (`setup()`/`loop()`, standard library
   calls) — no framework beyond the libraries listed above unless the user
   introduces one.
