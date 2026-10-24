@@ -1,0 +1,30 @@
+# sketch.yaml
+# Arduino CLI Sketch Project File for the QT Py RP2040 companion LED driver.
+# See arduino-macropad-led-controller/sketch.yaml for the general pattern
+# this follows, and
+# docs/superpowers/specs/2026-10-23-outdoor-led-driver-architecture-design.md
+# for why this sketch exists.
+#
+# `fqbn` confirmed via `arduino-cli board listall`. Library/platform
+# versions are pinned to what's actually installed (checked via
+# `arduino-cli lib list` / `arduino-cli core list`) — this `arduino-cli`
+# version's profile resolution requires an explicit version on every
+# entry, confirmed while building arduino-macropad-led-controller/sketch.yaml
+# in Task 1. `MacropadShared` is referenced as a local `dir:` entry since
+# it isn't a Library Manager package.
+#
+# STILL NOT YET VERIFIED — no real hardware attached while this was written:
+#   - STRIP_A_PIN/STRIP_B_PIN in outdoor_leds.h (GPIO29/28, the board's
+#     "A0"/"A1" pads) are placeholders — confirm against real wiring.
+
+profiles:
+  qtpy:
+    fqbn: rp2040:rp2040:adafruit_qtpy
+    platforms:
+      - platform: rp2040:rp2040 (6.0.0)
+        platform_index_url: https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
+    libraries:
+      - Adafruit NeoPixel (1.15.5)
+      - dir: ../MacropadShared
+
+default_profile: qtpy
