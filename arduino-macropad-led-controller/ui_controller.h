@@ -34,13 +34,18 @@
 // still acted on normally, rather than being swallowed as "just a wake."
 //
 // The MacroPad works fully with no QT Py attached — Brightness/Presets
-// never touch it, and Test Pattern fails gracefully (qtpy_link.h's
-// QTPY_LINK_NO_RESPONSE) rather than hanging. A persistent "!" icon in the
-// OLED's top-right corner (oled_display.h's renderCornerIcon()) shows
-// whenever the QT Py isn't found on the I2C bus — checked periodically
-// (QTPY_STATUS_POLL_MS) via a non-destructive presence probe
-// (isQtpyConnected()), regardless of menu state, so the absence is visible
-// at a glance rather than only after trying Test Pattern.
+// never touch it, and Test Pattern degrades gracefully rather than failing:
+// selecting it always enters UI_MENU_TEST_PATTERN and always runs the
+// keypad-LED preview with correct sequence/timing (useful for verifying
+// Test Pattern on the keypad alone before any outdoor hardware exists),
+// independent of whether startTestPatternOnQtpy() actually reached the QT
+// Py — a failure there is only logged (DEBUG_PRINT_VAL), never a
+// user-facing hint. A persistent "!" icon in the OLED's top-right corner
+// (oled_display.h's renderCornerIcon()) shows whenever the QT Py isn't
+// found on the I2C bus — checked periodically (QTPY_STATUS_POLL_MS) via a
+// non-destructive presence probe (isQtpyConnected()), regardless of menu
+// state, so the absence is visible at a glance rather than only after
+// trying Test Pattern.
 //
 // Exposes:
 //   initUiController()   — call once in setup(), after keypad/rotary/OLED/
@@ -259,24 +264,27 @@ static inline void _uiConfirm() {
     } else if (_uiTopHighlight == 2) {
       _uiShowHint("Custom: not built yet");
     } else {
+      // Best-effort — the keypad preview below runs regardless of whether
+      // the QT Py actually started, so the sequence/timing can be verified
+      // on the keypad alone with no outdoor hardware attached at all. QT
+      // Py connectivity is already shown ambiently via the corner icon
+      // (isQtpyConnected(), polled independently); a failure here only
+      // goes to the debug log, not a user-facing hint.
       QtpyLinkResult result = startTestPatternOnQtpy();
-      if (result == QTPY_LINK_OK) {
-        _uiMenuState          = UI_MENU_TEST_PATTERN;
-        _uiTestPatternStartMs = millis();
-        testPatternResetRenderState(&_uiTestPatternRenderState);
-        // A stale UI_ENTRY_VERB from before descending here (e.g. <verb>
-        // pressed, then rotated onto Test Pattern without a digit) would
-        // let a subsequent digit key fall into _uiHandleDigit()'s verb
-        // branch and switch _uiMenuState away without ever stopping the
-        // QT Py. Since <verb> always exits Test Pattern rather than
-        // re-entering verb entry while it's active, idling this here is
-        // sufficient to keep it idle for the whole run.
-        _uiEntryState = UI_ENTRY_IDLE;
-      } else if (result == QTPY_LINK_NO_RESPONSE) {
-        _uiShowHint("QT Py: no response");
-      } else {
-        _uiShowHint("QT Py: bad ACK byte");
+      if (result != QTPY_LINK_OK) {
+        DEBUG_PRINT_VAL("QT Py start failed, result", result);
       }
+      _uiMenuState          = UI_MENU_TEST_PATTERN;
+      _uiTestPatternStartMs = millis();
+      testPatternResetRenderState(&_uiTestPatternRenderState);
+      // A stale UI_ENTRY_VERB from before descending here (e.g. <verb>
+      // pressed, then rotated onto Test Pattern without a digit) would
+      // let a subsequent digit key fall into _uiHandleDigit()'s verb
+      // branch and switch _uiMenuState away without ever stopping the
+      // QT Py. Since <verb> always exits Test Pattern rather than
+      // re-entering verb entry while it's active, idling this here is
+      // sufficient to keep it idle for the whole run.
+      _uiEntryState = UI_ENTRY_IDLE;
     }
   }
   _uiRenderAll();

@@ -13,8 +13,13 @@
 //                              Pattern. The MacroPad works fully without a
 //                              QT Py attached either way: this is purely
 //                              informational.
-//   QtpyLinkResult           — startTestPatternOnQtpy()'s result, so the UI
-//                              can distinguish *why* it failed:
+//   QtpyLinkResult           — startTestPatternOnQtpy()'s result, so a
+//                              caller can distinguish *why* it failed (for
+//                              logging — ui_controller.h doesn't surface
+//                              this as a hint, since Test Pattern runs on
+//                              the keypad regardless and isQtpyConnected()
+//                              already covers the ambient "not connected"
+//                              indicator):
 //                                QTPY_LINK_OK           — ACKed, started
 //                                QTPY_LINK_NO_RESPONSE  — the transmission
 //                                  failed, or nothing came back at all on
