@@ -22,6 +22,16 @@
 //   renderMenuTestPattern()                             — static "running" display
 //   renderMessage(msg)                                  — "" clears the zone
 //   renderInputLine(text)                               — "" clears the zone
+//   sleepOledDisplay()                                  — powers the panel off
+//                                                          (SH110X_DISPLAYOFF)
+//                                                          without touching
+//                                                          the framebuffer, so
+//                                                          wakeOledDisplay()
+//                                                          alone restores
+//                                                          whatever was drawn
+//   wakeOledDisplay()                                   — powers the panel
+//                                                          back on
+//                                                          (SH110X_DISPLAYON)
 
 #pragma once
 
@@ -132,4 +142,12 @@ static inline void renderMessage(const char* msg) {
 static inline void renderInputLine(const char* text) {
   _drawRow(OLED_INPUT_ROW, text ? text : "");
   display.display();
+}
+
+static inline void sleepOledDisplay() {
+  display.oled_command(SH110X_DISPLAYOFF);
+}
+
+static inline void wakeOledDisplay() {
+  display.oled_command(SH110X_DISPLAYON);
 }

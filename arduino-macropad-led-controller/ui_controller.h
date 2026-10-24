@@ -27,6 +27,12 @@
 //     persistence of both the active scheme and brightness, however, is
 //     real (see settings_storage.h).
 //
+// After OLED_IDLE_TIMEOUT_MS (5 min) with no keypad/rotary input, the OLED
+// panel powers off (oled_display.h's sleepOledDisplay()) regardless of menu
+// state — this doesn't affect anything else (Test Pattern, if running,
+// keeps running via its own I2C-driven timer). Any input wakes it and is
+// still acted on normally, rather than being swallowed as "just a wake."
+//
 // Exposes:
 //   initUiController()   — call once in setup(), after keypad/rotary/OLED/
 //                           keypad LEDs/schemes/settings storage are all
@@ -48,6 +54,7 @@
 
 #define UI_HINT_DURATION_MS 2000
 #define BRIGHTNESS_STEP_PERCENT 5  // per felt detent; 20 detents/rev * 5% = 100%/rev
+#define OLED_IDLE_TIMEOUT_MS (5UL * 60UL * 1000UL)  // 5 minutes of no keypad/rotary input
 
 enum UiMenuState  { UI_MENU_TOP, UI_MENU_PRESET_LIST, UI_MENU_BRIGHTNESS, UI_MENU_TEST_PATTERN };
 enum UiEntryState { UI_ENTRY_IDLE, UI_ENTRY_VERB, UI_ENTRY_NOUN };
@@ -60,6 +67,8 @@ static int _uiVerbCode       = -1;     // -1 = no digit entered yet this verb se
 static int _uiPreviewMonth   = 1;      // 1-12, shared by rotary browse + noun digit entry
 static bool _uiNounHasDigits = false;  // has at least one digit been typed this noun session
 static unsigned long _uiTestPatternStartMs = 0;
+static unsigned long _uiLastInputMs = 0;
+static bool _uiDisplaySleeping = false;
 
 // Overwritten from flash in initUiController() (see settings_storage.h) —
 // these initializers are just the pre-boot default.
@@ -283,6 +292,7 @@ static inline void initUiController() {
   _uiConfirmedBrightness = savedBrightness;
   _uiPendingBrightness   = savedBrightness;
   _uiPreviewMonth        = savedScheme + 1;  // so browsing Presets starts on the saved month, not always January
+  _uiLastInputMs         = millis();
 
   clearKeypadLeds();
   _uiRenderAll();
@@ -290,7 +300,28 @@ static inline void initUiController() {
 }
 
 static inline void updateUiController() {
-  int keyIndex = pollKeypad();
+  int keyIndex     = pollKeypad();
+  int delta        = pollRotaryDelta();
+  bool rotaryPress = rotaryPressed();
+
+  // Wake (and force a redraw) before any of the normal handling below runs,
+  // so whatever that handling draws lands on an already-powered-on panel
+  // rather than on one still mid-wake. A screen that's been blank for 5+
+  // minutes shouldn't eat the input that wakes it — it still acts normally.
+  bool hadInput = (keyIndex >= 0) || (delta != 0) || rotaryPress;
+  if (hadInput) {
+    _uiLastInputMs = millis();
+    if (_uiDisplaySleeping) {
+      _uiDisplaySleeping = false;
+      wakeOledDisplay();
+      _uiRenderAll();
+    }
+  } else if (!_uiDisplaySleeping && millis() - _uiLastInputMs >= OLED_IDLE_TIMEOUT_MS) {
+    _uiDisplaySleeping = true;
+    sleepOledDisplay();
+    DEBUG_PRINTLN("OLED: sleeping (idle timeout)");
+  }
+
   if (keyIndex >= 0) {
     if (keyIndex == KEY_INDEX_VERB) {
       if (_uiMenuState == UI_MENU_TEST_PATTERN) {
@@ -314,7 +345,6 @@ static inline void updateUiController() {
     }
   }
 
-  int delta = pollRotaryDelta();
   if (delta != 0) {
     if (_uiMenuState == UI_MENU_TOP) {
       _uiTopHighlight = (_uiTopHighlight + delta) % 4;
@@ -335,7 +365,7 @@ static inline void updateUiController() {
     _uiRenderAll();
   }
 
-  if (rotaryPressed()) {
+  if (rotaryPress) {
     _uiConfirm();
   }
 
