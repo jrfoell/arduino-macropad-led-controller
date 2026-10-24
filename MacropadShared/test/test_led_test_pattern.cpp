@@ -33,6 +33,18 @@ int main() {
   assert(testPatternLedIsLit(1, /*evenParityLit=*/false) == true);
   assert(testPatternLedIsLit(270, /*evenParityLit=*/true) == true);  // even index, far into an 18m/540-LED strip
 
+  // Render-state change detection (code-review finding: a renderer that
+  // skips re-pushing pixels when the phase hasn't changed must forget that
+  // memory on a stop/reset, or restarting mid-phase shows stale/dark output
+  // for up to one phase duration).
+  TestPatternRenderState state;
+  testPatternResetRenderState(&state);
+  TestPatternPhase redOdd = { TEST_PATTERN_COLOR_RED, false };
+  assert(testPatternPhaseChanged(&state, redOdd) == true);   // first call always reports changed
+  assert(testPatternPhaseChanged(&state, redOdd) == false);  // same phase again: no change
+  testPatternResetRenderState(&state);
+  assert(testPatternPhaseChanged(&state, redOdd) == true);   // same phase as before reset: changed again
+
   printf("All led_test_pattern tests passed\n");
   return 0;
 }

@@ -6,7 +6,14 @@
 //
 // Exposes:
 //   initOutdoorLeds()                         — call once in setup()
-//   clearOutdoorLeds()                        — turn both strips off
+//   clearOutdoorLeds()                        — turn both strips off, and
+//                                                reset the render-state memo
+//                                                (see below) so the next
+//                                                showTestPatternOnOutdoorLeds()
+//                                                call always re-renders
+//                                                rather than trusting
+//                                                possibly-stale memory from
+//                                                a previous run
 //   showTestPatternOnOutdoorLeds(elapsedMs)   — render the Test Pattern
 //                                                sequence (led_test_pattern.h)
 //                                                at the given elapsed time
@@ -25,12 +32,14 @@
 
 static Adafruit_NeoPixel stripA(STRIP_A_LED_COUNT, STRIP_A_PIN, NEO_GRB + NEO_KHZ800);
 static Adafruit_NeoPixel stripB(STRIP_B_LED_COUNT, STRIP_B_PIN, NEO_GRB + NEO_KHZ800);
+static TestPatternRenderState _outdoorRenderState;
 
 static inline void initOutdoorLeds() {
   stripA.begin();
   stripA.show();
   stripB.begin();
   stripB.show();
+  testPatternResetRenderState(&_outdoorRenderState);
 }
 
 static inline void clearOutdoorLeds() {
@@ -38,6 +47,7 @@ static inline void clearOutdoorLeds() {
   stripA.show();
   stripB.clear();
   stripB.show();
+  testPatternResetRenderState(&_outdoorRenderState);
 }
 
 static inline void _renderOutdoorStrip(Adafruit_NeoPixel& strip, uint16_t count, uint32_t color, bool evenParityLit) {
@@ -48,11 +58,8 @@ static inline void _renderOutdoorStrip(Adafruit_NeoPixel& strip, uint16_t count,
 }
 
 static inline void showTestPatternOnOutdoorLeds(unsigned long elapsedMs) {
-  static TestPatternPhase lastPhase;
-  static bool havePhase = false;
-
   TestPatternPhase phase = testPatternPhaseAt(elapsedMs);
-  if (havePhase && phase.color == lastPhase.color && phase.evenParityLit == lastPhase.evenParityLit) {
+  if (!testPatternPhaseChanged(&_outdoorRenderState, phase)) {
     return;
   }
 
@@ -66,7 +73,4 @@ static inline void showTestPatternOnOutdoorLeds(unsigned long elapsedMs) {
 
   _renderOutdoorStrip(stripA, STRIP_A_LED_COUNT, color, phase.evenParityLit);
   _renderOutdoorStrip(stripB, STRIP_B_LED_COUNT, color, phase.evenParityLit);
-
-  lastPhase = phase;
-  havePhase = true;
 }

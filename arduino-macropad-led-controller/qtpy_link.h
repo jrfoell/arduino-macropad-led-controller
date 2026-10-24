@@ -8,7 +8,10 @@
 //   startTestPatternOnQtpy() — returns true only if the QT Py ACKed; false
 //                              on a failed transmission or a missing/wrong
 //                              ACK byte, so the caller can detect a dead
-//                              link instead of assuming it started
+//                              link instead of assuming it started. On any
+//                              ACK failure, also sends Stop first — a Start
+//                              that reached the QT Py but whose ACK didn't
+//                              reach us must not leave it running unseen.
 //   stopTestPatternOnQtpy()  — fire-and-forget, no response expected
 
 #pragma once
@@ -21,6 +24,12 @@ static inline void initQtpyLink() {
   DEBUG_PRINTLN("QT Py link: initialized");
 }
 
+static inline void stopTestPatternOnQtpy() {
+  Wire.beginTransmission(QTPY_I2C_ADDRESS);
+  Wire.write(QTPY_CMD_STOP);
+  Wire.endTransmission();
+}
+
 static inline bool startTestPatternOnQtpy() {
   Wire.beginTransmission(QTPY_I2C_ADDRESS);
   Wire.write(QTPY_CMD_START);
@@ -29,14 +38,13 @@ static inline bool startTestPatternOnQtpy() {
   }
 
   Wire.requestFrom(QTPY_I2C_ADDRESS, 1);
-  if (Wire.available() < 1) {
+  if (Wire.available() < 1 || Wire.read() != QTPY_ACK_BYTE) {
+    // The QT Py may have already received and acted on the Start even
+    // though we can't confirm it (a dropped ACK read, not a dropped Start)
+    // — send Stop so a half-succeeded Start can't leave the strips running
+    // with no UI anywhere aware of it.
+    stopTestPatternOnQtpy();
     return false;
   }
-  return Wire.read() == QTPY_ACK_BYTE;
-}
-
-static inline void stopTestPatternOnQtpy() {
-  Wire.beginTransmission(QTPY_I2C_ADDRESS);
-  Wire.write(QTPY_CMD_STOP);
-  Wire.endTransmission();
+  return true;
 }

@@ -21,9 +21,22 @@ void setup() {
 
 void loop() {
   bool running = isTestPatternRunning();
-  if (running && !_wasRunning) {
+
+  // consumeStartPending() is true on every received Start, including one
+  // that arrives while already running — so a restart always re-syncs the
+  // phase clock with the host rather than silently continuing a stale run.
+  if (consumeStartPending()) {
     _testPatternStartMs = millis();
+    DEBUG_PRINTLN("Test Pattern: start (re)received");
   }
+
+  if (!running && _wasRunning) {
+    // Covers an explicit Stop and any unrecognized command byte alike —
+    // either way, "not running" is what should blank the strips.
+    clearOutdoorLeds();
+    DEBUG_PRINTLN("Test Pattern: stopped");
+  }
+
   if (running) {
     showTestPatternOnOutdoorLeds(millis() - _testPatternStartMs);
   }

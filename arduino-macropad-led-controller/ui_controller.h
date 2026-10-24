@@ -199,6 +199,14 @@ static inline void _uiConfirm() {
       if (startTestPatternOnQtpy()) {
         _uiMenuState          = UI_MENU_TEST_PATTERN;
         _uiTestPatternStartMs = millis();
+        // A stale UI_ENTRY_VERB from before descending here (e.g. <verb>
+        // pressed, then rotated onto Test Pattern without a digit) would
+        // let a subsequent digit key fall into _uiHandleDigit()'s verb
+        // branch and switch _uiMenuState away without ever stopping the
+        // QT Py. Since <verb> always exits Test Pattern rather than
+        // re-entering verb entry while it's active, idling this here is
+        // sufficient to keep it idle for the whole run.
+        _uiEntryState = UI_ENTRY_IDLE;
       } else {
         _uiShowHint("QT Py: no ACK");
       }
