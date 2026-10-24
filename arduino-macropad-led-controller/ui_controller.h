@@ -33,6 +33,14 @@
 // keeps running via its own I2C-driven timer). Any input wakes it and is
 // still acted on normally, rather than being swallowed as "just a wake."
 //
+// The MacroPad works fully with no QT Py attached — Brightness/Presets
+// never touch it, and Test Pattern fails gracefully (qtpy_link.h's
+// QTPY_LINK_NO_RESPONSE) rather than hanging. While highlighting "Test
+// Pattern" on the top menu, the message zone also proactively shows "QT
+// Py: not connected" (via a non-destructive I2C presence probe,
+// isQtpyConnected()) if it isn't there — informational only, so you know
+// before trying rather than only after.
+//
 // Exposes:
 //   initUiController()   — call once in setup(), after keypad/rotary/OLED/
 //                           keypad LEDs/schemes/settings storage are all
@@ -123,6 +131,10 @@ static inline void _uiRenderMessage() {
     renderMessage("Rotary Press: Confirm");
   } else if (_uiMenuState == UI_MENU_TEST_PATTERN) {
     renderMessage("Rotary Press: Exit");
+  } else if (_uiMenuState == UI_MENU_TOP && _uiTopHighlight == 3 && !isQtpyConnected()) {
+    // Purely informational — selecting it anyway still fails gracefully
+    // via startTestPatternOnQtpy()'s own QTPY_LINK_NO_RESPONSE handling.
+    renderMessage("QT Py: not connected");
   } else {
     renderMessage("");
   }

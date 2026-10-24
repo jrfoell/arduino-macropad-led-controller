@@ -5,6 +5,14 @@
 //
 // Exposes:
 //   initQtpyLink()           — call once in setup()
+//   isQtpyConnected()        — a cheap, non-destructive I2C presence probe
+//                              (addresses the QT Py, sends no command bytes)
+//                              — call this whenever the UI wants to show a
+//                              "not connected" hint proactively, separate
+//                              from actually attempting to start/stop Test
+//                              Pattern. The MacroPad works fully without a
+//                              QT Py attached either way: this is purely
+//                              informational.
 //   QtpyLinkResult           — startTestPatternOnQtpy()'s result, so the UI
 //                              can distinguish *why* it failed:
 //                                QTPY_LINK_OK           — ACKed, started
@@ -30,6 +38,14 @@ enum QtpyLinkResult { QTPY_LINK_OK, QTPY_LINK_NO_RESPONSE, QTPY_LINK_BAD_ACK };
 static inline void initQtpyLink() {
   Wire.begin();
   DEBUG_PRINTLN("QT Py link: initialized");
+}
+
+// Addresses the QT Py and checks for an ACK — no command byte is sent, so
+// this never starts/stops/affects anything, unlike startTestPatternOnQtpy()
+// and stopTestPatternOnQtpy() below.
+static inline bool isQtpyConnected() {
+  Wire.beginTransmission(QTPY_I2C_ADDRESS);
+  return Wire.endTransmission() == 0;
 }
 
 static inline void stopTestPatternOnQtpy() {
