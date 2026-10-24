@@ -279,15 +279,19 @@ Added as a 4th top-level OLED menu item, after the existing
 - **Named constants** (not hardcoded), so both are easy to retune later:
   `LED_TEST_PATTERN_STRIDE` (2, for every-other) and
   `LED_TEST_PATTERN_PHASE_MS` (5000).
-- **Always renders at fixed, full single-color brightness — the global
-  Brightness setting is ignored while Test Pattern is active.** The power
-  budget table above is computed at full per-LED current draw; if the
-  existing brightness scalar were applied here too, the test would
-  sometimes run dimmer than analyzed, which would make it falsely pass
-  (looks fine at reduced power) without ever actually validating the
-  worst-case draw it's meant to prove. Builder's call, not a safety risk
-  either way (scaling down only ever reduces draw further below the
-  budget), but worth being deliberate about so the test stays meaningful.
+- **Always renders at a fixed brightness set by its own constant
+  (`LED_TEST_PATTERN_BRIGHTNESS_PERCENT`, default 50%) — the global
+  Brightness setting is never consulted while Test Pattern is active.**
+  Using a dedicated constant rather than the global Brightness setting
+  means the test stays repeatable regardless of whatever the user last
+  set Brightness to — it was already going to ignore that setting (see
+  below), so pinning its own fixed value was the builder's call either
+  way; the default of 50% rather than 100% is yours, for extra headroom
+  on a first real-hardware run. At 50%, the power-budget table above
+  roughly halves (9W/36% and 6W/24% of the 25W fuse budget for the
+  18m/12m strips) — still easily enough to confirm signal and power reach
+  the full strip length, just with more margin than running it at full.
+  Raise the constant toward 100% once you've confirmed the wiring is good.
 - **Not persisted.** Running Test Pattern never calls `saveSettings()` and
   never changes the confirmed active scheme. Exiting (pressing `<verb>` or
   the rotary again) returns to the top menu, and whichever scheme was
@@ -302,13 +306,17 @@ library, since Arduino's tooling requires one sketch = one folder = one
 `.ino` matching the folder name, and a sketch targets exactly one board:
 
 ```
-arduino-macropad-led-controller/          (repo root — unchanged in spirit)
-├── arduino-macropad-led-controller.ino   (existing MacroPad sketch)
-├── sketch.yaml                           (existing — MacroPad FQBN/libs)
-├── debug.h, colors.h, gpio_expander.h, ...  (existing headers — gpio_expander.h
-│                                              becomes dead code once MCP23017
-│                                              is fully removed; see "left to
-│                                              the builder")
+arduino-macropad-led-controller/          (repo root — now holds 3 siblings,
+│                                            not the MacroPad sketch itself)
+├── CLAUDE.md, docs/, .git/, ...          (project-wide, not sketch-specific)
+├── arduino-macropad-led-controller/      (MacroPad sketch — moved into its
+│   ├── arduino-macropad-led-controller.ino   own folder, matching Arduino's
+│   ├── sketch.yaml                           one-sketch-one-folder rule
+│   └── debug.h, colors.h, gpio_expander.h, ...  explicitly rather than by
+│                                              relying on the repo root's own
+│                                              name coincidentally matching —
+│                                              gpio_expander.h becomes dead
+│                                              code once MCP23017 is removed
 ├── qtpy_led_driver/
 │   ├── qtpy_led_driver.ino               (new — QT Py sketch)
 │   └── sketch.yaml                       (new — QT Py FQBN/libs, separate
@@ -329,15 +337,31 @@ Each sketch keeps its own hardware-specific code (which `Adafruit_NeoPixel`
 instance, which pins, how many LEDs) and just calls into the shared logic
 for the sequencing decision.
 
-**Unverified / left to the builder:** the exact mechanics of how
-`arduino-cli`/`sketch.yaml` resolve a local shared library across two
-sibling sketches in the same repo (vs. one installed globally in the
-Arduino sketchbook folder) haven't been tested. Verify this hands-on early
-— before writing much logic into `MacropadShared` — in the same spirit as
-this project's existing "verify library calls before trusting them"
-practice. If local-library resolution turns out not to work cleanly, the
-fallback is duplicating the (small) shared logic into each sketch rather
-than blocking the whole feature on tooling.
+**Confirmed, not just assumed:** `MacropadShared` is resolved by adding a
+local directory entry — `- dir: ../MacropadShared` — to each sketch's
+`sketch.yaml` `libraries:` list, confirmed working during implementation.
+(An earlier plan draft expected to pass `--library MacropadShared` on the
+compile command instead; that flag turned out to be mutually exclusive
+with `--profile` in the installed `arduino-cli` version, so the `dir:`
+entry is the actual mechanism, not a fallback.)
+
+**Also discovered while implementing this:** a `sketch.yaml`'s mere
+presence in a sketch directory makes this `arduino-cli` version
+(1.5.2-rc.1) auto-engage profile resolution regardless of which compile
+flags are passed — bare `--fqbn` fails exactly like an unversioned
+`--profile` does. The actual fix: this version requires an explicit
+version on every profile `libraries:` and `platforms:` entry (`Name
+(version)` syntax); the repo's original bare-name entries ("versions
+intentionally omitted") don't resolve even though those exact
+libraries/platform are already installed. Both sketches' `sketch.yaml`
+files pin real installed versions (checked via `arduino-cli lib list` /
+`core list`) for this reason, and every compile in this project now uses
+`arduino-cli compile --profile <name> <sketch-dir>`.
+
+**Also found while verifying this:** the MacroPad's `sketch.yaml` FQBN was
+wrong — `rp2040:rp2040:adafruit_macropad` doesn't exist in the installed
+`rp2040:rp2040` core; the real id is `adafruit_macropad2040` (confirmed via
+`arduino-cli board listall`). Fixed as part of implementation.
 
 ## MacroPad ↔ QT Py command link (decided — minimal, Test-Pattern-scoped)
 
@@ -392,8 +416,6 @@ watching the strips. No resync mechanism needed.
 - Measure real combined current draw (MacroPad + QT Py) against the
   MacroPad's 3.3V regulator headroom before relying on STEMMA QT
   back-powering in the field.
-- Verify `arduino-cli`/`sketch.yaml` local shared-library resolution
-  across the two sketches (see "Repo structure").
 - Exact QT Py GPIO pin numbers for the two strip data lines (any two of
   its free, PIO-capable pins).
 - Exact I2C command byte values for Start/Stop Test Pattern.

@@ -1,0 +1,42 @@
+# sketch.yaml
+# Arduino CLI "Sketch Project File" — pins the board core and libraries this
+# sketch depends on, so `arduino-cli compile --profile macropad` (or an IDE
+# that reads sketch.yaml) resolves the same environment every time.
+#
+# `fqbn` below is confirmed against a live `arduino-cli board listall` —
+# it's `adafruit_macropad2040`, not the `adafruit_macropad` this file
+# originally guessed (that id doesn't exist in the installed
+# `rp2040:rp2040` core).
+#
+# Library versions below are pinned to what's actually installed (checked
+# via `arduino-cli lib list`), confirmed by a real `arduino-cli compile
+# --profile macropad` run — not guessed. This `arduino-cli` version
+# (1.5.2-rc.1) requires a version on every profile library entry; a bare
+# unversioned name (this file's original state) fails to resolve even when
+# that exact library is already installed globally.
+
+profiles:
+  macropad:
+    fqbn: rp2040:rp2040:adafruit_macropad2040
+    platforms:
+      - platform: rp2040:rp2040 (6.0.0)
+        platform_index_url: https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
+    libraries:
+      # Onboard MacroPad NeoPixels + (possibly) outdoor LEDs — keypad_leds.h, led_presets.h
+      - Adafruit NeoPixel (1.15.5)
+      # 128x64 SH1106G OLED — oled_display.h
+      - Adafruit SH110X (2.1.14)
+      # Adafruit SH110X's own dependencies. Listed explicitly: unlike a plain
+      # `arduino-cli lib install`, a sketch.yaml profile does not appear to
+      # auto-resolve a library's transitive Library Manager dependencies.
+      - Adafruit GFX Library (1.12.6)
+      - Adafruit BusIO (1.17.4)
+      # Rotary encoder decoding (LatchMode::FOUR3) — rotary_input.h
+      - RotaryEncoder (1.6.0)
+      # MCP23017 I2C GPIO expander — gpio_expander.h. Only actually used
+      # when HARDWARE_GPIO_EXPANDER is defined in the .ino, but listed
+      # unconditionally since sketch.yaml has no concept of the sketch's
+      # compile-time feature flags.
+      - Adafruit MCP23017 Arduino Library (2.3.2)
+
+default_profile: macropad
