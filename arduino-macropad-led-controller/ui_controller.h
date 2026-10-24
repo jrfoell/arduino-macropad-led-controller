@@ -35,11 +35,12 @@
 //
 // The MacroPad works fully with no QT Py attached — Brightness/Presets
 // never touch it, and Test Pattern fails gracefully (qtpy_link.h's
-// QTPY_LINK_NO_RESPONSE) rather than hanging. While highlighting "Test
-// Pattern" on the top menu, the message zone also proactively shows "QT
-// Py: not connected" (via a non-destructive I2C presence probe,
-// isQtpyConnected()) if it isn't there — informational only, so you know
-// before trying rather than only after.
+// QTPY_LINK_NO_RESPONSE) rather than hanging. A persistent "!" icon in the
+// OLED's top-right corner (oled_display.h's renderCornerIcon()) shows
+// whenever the QT Py isn't found on the I2C bus — checked periodically
+// (QTPY_STATUS_POLL_MS) via a non-destructive presence probe
+// (isQtpyConnected()), regardless of menu state, so the absence is visible
+// at a glance rather than only after trying Test Pattern.
 //
 // Exposes:
 //   initUiController()   — call once in setup(), after keypad/rotary/OLED/
@@ -63,6 +64,7 @@
 #define UI_HINT_DURATION_MS 2000
 #define BRIGHTNESS_STEP_PERCENT 5  // per felt detent; 20 detents/rev * 5% = 100%/rev
 #define OLED_IDLE_TIMEOUT_MS (5UL * 60UL * 1000UL)  // 5 minutes of no keypad/rotary input
+#define QTPY_STATUS_POLL_MS 1000  // how often to re-probe QT Py presence for the corner icon
 
 enum UiMenuState  { UI_MENU_TOP, UI_MENU_PRESET_LIST, UI_MENU_BRIGHTNESS, UI_MENU_TEST_PATTERN };
 enum UiEntryState { UI_ENTRY_IDLE, UI_ENTRY_VERB, UI_ENTRY_NOUN };
@@ -77,6 +79,8 @@ static bool _uiNounHasDigits = false;  // has at least one digit been typed this
 static unsigned long _uiTestPatternStartMs = 0;
 static unsigned long _uiLastInputMs = 0;
 static bool _uiDisplaySleeping = false;
+static bool _uiQtpyConnected = false;        // last-known state, refreshed periodically
+static unsigned long _uiQtpyStatusCheckedAt = 0;
 
 // Overwritten from flash in initUiController() (see settings_storage.h) —
 // these initializers are just the pre-boot default.
@@ -131,13 +135,17 @@ static inline void _uiRenderMessage() {
     renderMessage("Rotary Press: Confirm");
   } else if (_uiMenuState == UI_MENU_TEST_PATTERN) {
     renderMessage("Rotary Press: Exit");
-  } else if (_uiMenuState == UI_MENU_TOP && _uiTopHighlight == 3 && !isQtpyConnected()) {
-    // Purely informational — selecting it anyway still fails gracefully
-    // via startTestPatternOnQtpy()'s own QTPY_LINK_NO_RESPONSE handling.
-    renderMessage("QT Py: not connected");
   } else {
     renderMessage("");
   }
+}
+
+// Re-asserts the corner icon from the cached connectivity state (no I2C
+// traffic here) — call after anything that redraws row 0, since every
+// renderMenu*() function redraws that whole row and would otherwise erase
+// the icon's cell along with it.
+static inline void _uiRenderQtpyIcon() {
+  renderCornerIcon(_uiQtpyConnected ? 0 : '!');
 }
 
 static inline void _uiRenderInput() {
@@ -195,6 +203,29 @@ static inline void _uiRenderAll() {
   _uiRenderMenu();
   _uiRenderMessage();
   _uiRenderInput();
+  _uiRenderQtpyIcon();
+}
+
+// Refreshes the cached QT Py connectivity state at most once every
+// QTPY_STATUS_POLL_MS (an I2C presence probe every loop() iteration would
+// be needless bus traffic). Only touches the display when the state
+// actually changed — _uiRenderAll() already re-asserts the icon on every
+// full render, so this is specifically for the "nothing else happens to
+// redraw" case (e.g. sitting idle on the Brightness screen while the QT Py
+// gets plugged in or unplugged).
+static inline void _uiPollQtpyStatus() {
+  unsigned long now = millis();
+  if (_uiQtpyStatusCheckedAt != 0 && now - _uiQtpyStatusCheckedAt < QTPY_STATUS_POLL_MS) {
+    return;
+  }
+  _uiQtpyStatusCheckedAt = now;
+
+  bool connected = isQtpyConnected();
+  if (connected != _uiQtpyConnected) {
+    _uiQtpyConnected = connected;
+    DEBUG_PRINT_VAL("QT Py connected", _uiQtpyConnected);
+    _uiRenderQtpyIcon();
+  }
 }
 
 static inline void _uiConfirm() {
@@ -305,6 +336,8 @@ static inline void initUiController() {
   _uiPendingBrightness   = savedBrightness;
   _uiPreviewMonth        = savedScheme + 1;  // so browsing Presets starts on the saved month, not always January
   _uiLastInputMs         = millis();
+  _uiQtpyConnected       = isQtpyConnected();
+  _uiQtpyStatusCheckedAt = millis();
 
   clearKeypadLeds();
   _uiRenderAll();
@@ -391,4 +424,6 @@ static inline void updateUiController() {
   if (_uiMenuState == UI_MENU_TEST_PATTERN) {
     _uiShowTestPatternKeypadPreview();
   }
+
+  _uiPollQtpyStatus();
 }

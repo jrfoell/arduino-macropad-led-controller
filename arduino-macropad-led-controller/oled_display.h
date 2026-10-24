@@ -22,6 +22,28 @@
 //   renderMenuTestPattern()                             — static "running" display
 //   renderMessage(msg)                                  — "" clears the zone
 //   renderInputLine(text)                               — "" clears the zone
+//   renderCornerIcon(ch)                                 — draws a single
+//                                                          status character
+//                                                          in the top-right
+//                                                          corner cell (row
+//                                                          0's last
+//                                                          character
+//                                                          position), or
+//                                                          clears it if
+//                                                          ch == 0. This
+//                                                          overwrites
+//                                                          whatever was in
+//                                                          that cell, so
+//                                                          callers that want
+//                                                          a persistent icon
+//                                                          must call this
+//                                                          again after any
+//                                                          render that
+//                                                          touches row 0
+//                                                          (every
+//                                                          renderMenu*()
+//                                                          function redraws
+//                                                          that full row)
 //   sleepOledDisplay()                                  — powers the panel off
 //                                                          (SH110X_DISPLAYOFF)
 //                                                          without touching
@@ -141,6 +163,20 @@ static inline void renderMessage(const char* msg) {
 
 static inline void renderInputLine(const char* text) {
   _drawRow(OLED_INPUT_ROW, text ? text : "");
+  display.display();
+}
+
+// Last 6px-wide character cell of row 0 (x = (OLED_TEXT_COLS-1)*6..127, the
+// 2px beyond that aren't a full glyph column and are left alone).
+static inline void renderCornerIcon(char ch) {
+  const int16_t x = (OLED_TEXT_COLS - 1) * 6;
+  display.fillRect(x, 0, 6, 8, SH110X_BLACK);
+  if (ch != 0) {
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE, SH110X_BLACK);
+    display.setCursor(x, 0);
+    display.print(ch);
+  }
   display.display();
 }
 
