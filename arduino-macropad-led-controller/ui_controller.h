@@ -27,7 +27,7 @@
 //     persistence of both the active scheme and brightness, however, is
 //     real (see settings_storage.h).
 //
-// After OLED_IDLE_TIMEOUT_MS (5 min) with no keypad/rotary input, the OLED
+// After OLED_IDLE_TIMEOUT_MS (1 min) with no keypad/rotary input, the OLED
 // panel powers off (oled_display.h's sleepOledDisplay()) regardless of menu
 // state — this doesn't affect anything else (Test Pattern, if running,
 // keeps running via its own I2C-driven timer). Any input wakes it and is
@@ -68,7 +68,7 @@
 
 #define UI_HINT_DURATION_MS 2000
 #define BRIGHTNESS_STEP_PERCENT 5  // per felt detent; 20 detents/rev * 5% = 100%/rev
-#define OLED_IDLE_TIMEOUT_MS (5UL * 60UL * 1000UL)  // 5 minutes of no keypad/rotary input
+#define OLED_IDLE_TIMEOUT_MS (1UL * 60UL * 1000UL)  // 1 minute of no keypad/rotary input
 #define QTPY_STATUS_POLL_MS 1000  // how often to re-probe QT Py presence for the corner icon
 
 enum UiMenuState  { UI_MENU_TOP, UI_MENU_PRESET_LIST, UI_MENU_BRIGHTNESS, UI_MENU_TEST_PATTERN };
