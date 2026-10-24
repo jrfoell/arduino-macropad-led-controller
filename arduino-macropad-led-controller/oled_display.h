@@ -14,10 +14,12 @@
 // Exposes:
 //   initOledDisplay()                                  — call once in setup()
 //   renderMenuTop(highlightIndex)                       — 0=Brightness,
-//                                                          1=Presets, 2=Custom
+//                                                          1=Presets, 2=Custom,
+//                                                          3=Test Pattern
 //   renderMenuPresetList(highlightMonth, names, count)  — 1-based month,
 //                                                          scrolls a 6-row window
 //   renderMenuBrightness(percent)                       — 0-100, text progress bar
+//   renderMenuTestPattern()                             — static "running" display
 //   renderMessage(msg)                                  — "" clears the zone
 //   renderInputLine(text)                               — "" clears the zone
 
@@ -60,10 +62,10 @@ static inline void _drawRow(uint8_t row, const char* text) {
 }
 
 static inline void renderMenuTop(int highlightIndex) {
-  static const char* const TOP_MENU_ITEMS[3] = {"Brightness", "Presets", "Custom"};
+  static const char* const TOP_MENU_ITEMS[4] = {"Brightness", "Presets", "Custom", "Test Pattern"};
   char line[OLED_TEXT_COLS + 1];
   for (int row = 0; row < OLED_MENU_ROWS; row++) {
-    if (row < 3) {
+    if (row < 4) {
       snprintf(line, sizeof(line), "%c%s", (row == highlightIndex) ? '>' : ' ', TOP_MENU_ITEMS[row]);
       _drawRow(row, line);
     } else {
@@ -89,6 +91,13 @@ static inline void renderMenuBrightness(int percent) {
   _drawRow(0, "Brightness");
   snprintf(line, sizeof(line), "[%s] %3d%%", bar, percent);
   _drawRow(1, line);
+  for (int row = 2; row < OLED_MENU_ROWS; row++) _drawRow(row, "");
+  display.display();
+}
+
+static inline void renderMenuTestPattern() {
+  _drawRow(0, "Test Pattern");
+  _drawRow(1, "Running...");
   for (int row = 2; row < OLED_MENU_ROWS; row++) _drawRow(row, "");
   display.display();
 }
