@@ -22,12 +22,15 @@
 #include <Adafruit_NeoPixel.h>
 #include "led_test_pattern.h"
 
-// Pin numbers are QT Py "A0"/"A1" pads (GPIO29/GPIO28 per arduino-pico's
-// adafruit_qtpy variant header) — NOT YET VERIFIED against real wiring,
-// per this project's existing convention; confirm once hardware exists.
-#define STRIP_A_PIN       29  // 18m strip
+// Pin assignment is confirmed (not just a placeholder): QT Py "A0"/"A1"
+// pads (GPIO29/GPIO28 per arduino-pico's adafruit_qtpy variant header),
+// A0 -> the 18m strip and A1 -> the 12m strip, deliberately matching the
+// installation's 1st-floor/2nd-floor order (18m = 1st floor = lower pad
+// number). Still unverified at the signal level against the real wiring
+// to the QuinLED Diff-Adv Sender-4 until that's actually connected.
+#define STRIP_A_PIN       29  // 18m strip — 1st floor
 #define STRIP_A_LED_COUNT 540
-#define STRIP_B_PIN       28  // 12m strip
+#define STRIP_B_PIN       28  // 12m strip — 2nd floor
 #define STRIP_B_LED_COUNT 360
 
 static Adafruit_NeoPixel stripA(STRIP_A_LED_COUNT, STRIP_A_PIN, NEO_GRB + NEO_KHZ800);

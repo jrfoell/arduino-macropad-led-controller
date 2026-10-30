@@ -31,9 +31,12 @@ have been **compiled and run for real** against an installed `arduino-cli`
 particular, this `arduino-cli` version requires an explicit version on
 every `sketch.yaml` profile `libraries:`/`platforms:` entry, and always
 use `--profile`, never bare `--fqbn`). Still unverified against real
-hardware: the rotary direction (CW vs CCW) may need swapping, and the QT
-Py's two outdoor-strip GPIO pins (`STRIP_A_PIN`/`STRIP_B_PIN` in
-`qtpy_led_driver/outdoor_leds.h`) are placeholders pending real wiring.
+hardware: the rotary direction (CW vs CCW) may need swapping, and the
+QT Py's two outdoor-strip GPIO pins (`STRIP_A_PIN`/`STRIP_B_PIN` in
+`qtpy_led_driver/outdoor_leds.h`) — A0/GPIO29 for the 18m (1st floor)
+strip, A1/GPIO28 for the 12m (2nd floor) strip, confirmed as the intended
+assignment but not yet signal-tested against the real QuinLED Diff-Adv
+Sender-4 wiring.
 
 ## Project goal
 
@@ -84,9 +87,11 @@ power-budget math behind the "Test Pattern" diagnostic mode, and everything
 this paragraph compresses: see
 `docs/superpowers/specs/2026-10-23-outdoor-led-driver-architecture-design.md`.
 
-**Not yet verified**: the QT Py's two outdoor-strip GPIO pin assignments
-against real wiring (see "Project state"); the MacroPad's own 3.3V
-regulator headroom for also powering the QT Py over STEMMA QT.
+**Not yet verified**: the QT Py's two outdoor-strip GPIO pins (A0 -> 18m/
+1st floor, A1 -> 12m/2nd floor — confirmed as the intended assignment, see
+"Project state") against real signal-level wiring to the QuinLED Diff-Adv
+Sender-4; the MacroPad's own 3.3V regulator headroom for also powering the
+QT Py over STEMMA QT.
 
 ## Arduino toolchain setup
 
