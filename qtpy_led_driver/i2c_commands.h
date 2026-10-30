@@ -13,20 +13,25 @@
 // Exposes:
 //   initI2cCommands()        — call once in setup()
 //   isTestPatternRunning()   — call every loop(); true between a received
-//                              Start and the next Stop (or any other
-//                              non-Start byte)
+//                              Start and the next explicit Stop.
+//                              QTPY_CMD_PING (or any other unrecognized
+//                              byte) is explicitly ignored here — it only
+//                              counts as a heartbeat (see isHostLinkAlive()
+//                              below), never as an implicit Stop, so the
+//                              MacroPad's once-a-second presence probe
+//                              can't interrupt a running Test Pattern.
 //   consumeStartPending()    — call every loop(); returns true at most once
 //                              per received Start — including a Start
 //                              received while already running, so the
 //                              phase clock always restarts on a fresh
 //                              Start rather than silently continuing a
 //                              stale run out of sync with the host
-//   isHostLinkAlive()        — true if *any* I2C contact (a real command,
-//                              or just the MacroPad's bare presence probe)
-//                              was heard within QTPY_LINK_TIMEOUT_MS. There
-//                              is no dedicated heartbeat command — this
-//                              reuses whatever traffic already happens, see
-//                              i2c_protocol.h. Used by link_status_led.h.
+//   isHostLinkAlive()        — true if any QTPY_CMD_PING/START/STOP was
+//                              heard within QTPY_LINK_TIMEOUT_MS. There is
+//                              no separate heartbeat protocol — this reuses
+//                              whatever command traffic already happens
+//                              (see i2c_protocol.h). Used by
+//                              link_status_led.h.
 
 #pragma once
 #include <Wire.h>
@@ -37,10 +42,15 @@ static volatile bool _startPending       = false;
 static volatile unsigned long _lastI2cActivityMs = 0;
 
 static void _onI2cReceive(int numBytes) {
-  _lastI2cActivityMs = millis();  // counts even a bare presence probe (numBytes==0)
+  // NOTE: a bare zero-byte transaction (address only, no Wire.write())
+  // never reaches here at all — the installed arduino-pico core's
+  // Wire.cpp only invokes this callback `if (_buffLen)`. QTPY_CMD_PING
+  // exists specifically so the MacroPad's presence probe always carries a
+  // real byte and reliably lands here.
   if (numBytes < 1 || !Wire1.available()) {
     return;
   }
+  _lastI2cActivityMs = millis();
   uint8_t cmd = Wire1.read();
   while (Wire1.available()) {
     Wire1.read();  // drain any extra bytes
@@ -49,9 +59,12 @@ static void _onI2cReceive(int numBytes) {
   if (cmd == QTPY_CMD_START) {
     _testPatternRunning = true;
     _startPending        = true;  // always re-latch the clock, even if already running
-  } else {
-    _testPatternRunning = false;  // any other byte (Stop, or anything unrecognized) stops the run
+  } else if (cmd == QTPY_CMD_STOP) {
+    _testPatternRunning = false;
   }
+  // QTPY_CMD_PING (and anything else unrecognized): heartbeat already
+  // counted above; deliberately no effect on _testPatternRunning, so the
+  // presence probe can't interrupt a running Test Pattern.
 }
 
 static void _onI2cRequest() {

@@ -6,13 +6,19 @@
 // Exposes:
 //   initQtpyLink()           — call once in setup()
 //   isQtpyConnected()        — a cheap, non-destructive I2C presence probe
-//                              (addresses the QT Py, sends no command bytes)
 //                              — call this whenever the UI wants to show a
 //                              "not connected" hint proactively, separate
 //                              from actually attempting to start/stop Test
 //                              Pattern. The MacroPad works fully without a
 //                              QT Py attached either way: this is purely
-//                              informational.
+//                              informational. Writes QTPY_CMD_PING (not a
+//                              bare zero-byte transaction) specifically so
+//                              it also registers as a heartbeat on the QT
+//                              Py's side (see i2c_protocol.h) — a zero-byte
+//                              write never reaches the QT Py's onReceive
+//                              handler at all on the installed arduino-pico
+//                              core, confirmed against that library's own
+//                              Wire.cpp.
 //   QtpyLinkResult           — startTestPatternOnQtpy()'s result, so a
 //                              caller can distinguish *why* it failed (for
 //                              logging — ui_controller.h doesn't surface
@@ -45,11 +51,13 @@ static inline void initQtpyLink() {
   DEBUG_PRINTLN("QT Py link: initialized");
 }
 
-// Addresses the QT Py and checks for an ACK — no command byte is sent, so
-// this never starts/stops/affects anything, unlike startTestPatternOnQtpy()
-// and stopTestPatternOnQtpy() below.
+// Addresses the QT Py and checks for an ACK. Writes QTPY_CMD_PING, which
+// the QT Py's command handler explicitly ignores for run-state purposes
+// (see i2c_commands.h) — this never starts/stops/affects anything, unlike
+// startTestPatternOnQtpy() and stopTestPatternOnQtpy() below.
 static inline bool isQtpyConnected() {
   Wire.beginTransmission(QTPY_I2C_ADDRESS);
+  Wire.write(QTPY_CMD_PING);
   return Wire.endTransmission() == 0;
 }
 
