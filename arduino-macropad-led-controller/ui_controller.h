@@ -69,7 +69,10 @@
 #define UI_HINT_DURATION_MS 2000
 #define BRIGHTNESS_STEP_PERCENT 5  // per felt detent; 20 detents/rev * 5% = 100%/rev
 #define OLED_IDLE_TIMEOUT_MS (1UL * 60UL * 1000UL)  // 1 minute of no keypad/rotary input
-#define QTPY_STATUS_POLL_MS 1000  // how often to re-probe QT Py presence for the corner icon
+// QTPY_STATUS_POLL_MS comes from MacropadShared's i2c_protocol.h (included
+// via qtpy_link.h below) — the QT Py's own link-timeout threshold is
+// derived from this same constant, so it lives in the shared header rather
+// than being redefined here.
 
 enum UiMenuState  { UI_MENU_TOP, UI_MENU_PRESET_LIST, UI_MENU_BRIGHTNESS, UI_MENU_TEST_PATTERN };
 enum UiEntryState { UI_ENTRY_IDLE, UI_ENTRY_VERB, UI_ENTRY_NOUN };

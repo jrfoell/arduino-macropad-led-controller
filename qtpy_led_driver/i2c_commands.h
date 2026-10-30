@@ -21,6 +21,12 @@
 //                              phase clock always restarts on a fresh
 //                              Start rather than silently continuing a
 //                              stale run out of sync with the host
+//   isHostLinkAlive()        — true if *any* I2C contact (a real command,
+//                              or just the MacroPad's bare presence probe)
+//                              was heard within QTPY_LINK_TIMEOUT_MS. There
+//                              is no dedicated heartbeat command — this
+//                              reuses whatever traffic already happens, see
+//                              i2c_protocol.h. Used by link_status_led.h.
 
 #pragma once
 #include <Wire.h>
@@ -28,8 +34,10 @@
 
 static volatile bool _testPatternRunning = false;
 static volatile bool _startPending       = false;
+static volatile unsigned long _lastI2cActivityMs = 0;
 
 static void _onI2cReceive(int numBytes) {
+  _lastI2cActivityMs = millis();  // counts even a bare presence probe (numBytes==0)
   if (numBytes < 1 || !Wire1.available()) {
     return;
   }
@@ -54,9 +62,14 @@ static void _onI2cRequest() {
 }
 
 static inline void initI2cCommands() {
+  _lastI2cActivityMs = millis();  // grace period before boot could ever read as "timed out"
   Wire1.begin(QTPY_I2C_ADDRESS);
   Wire1.onReceive(_onI2cReceive);
   Wire1.onRequest(_onI2cRequest);
+}
+
+static inline bool isHostLinkAlive() {
+  return (millis() - _lastI2cActivityMs) < QTPY_LINK_TIMEOUT_MS;
 }
 
 static inline bool isTestPatternRunning() {

@@ -8,6 +8,7 @@
 #include "debug.h"
 #include "outdoor_leds.h"
 #include "i2c_commands.h"
+#include "link_status_led.h"
 
 static unsigned long _testPatternStartMs = 0;
 static bool _wasRunning = false;
@@ -16,10 +17,13 @@ void setup() {
   DEBUG_BEGIN(115200);
   initOutdoorLeds();
   initI2cCommands();
+  initLinkStatusLed();
   DEBUG_PRINTLN("QT Py LED driver: initialized");
 }
 
 void loop() {
+  updateLinkStatusLed(isHostLinkAlive());
+
   bool running = isTestPatternRunning();
 
   // consumeStartPending() is true on every received Start, including one

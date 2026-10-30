@@ -172,9 +172,10 @@ substitute for reading them):
 - `qtpy_link.h` — MacroPad-side (I2C host) Start/Stop Test Pattern commands to the QT Py LED driver, with ACK-based dead-link detection on Start
 - `ui_controller.h` — the verb/noun/menu state machine tying keypad + rotary input + OLED + keypad LEDs + `led_presets.h` + `settings_storage.h` + `qtpy_link.h` together; implements the flow in `docs/superpowers/specs/2026-08-02-ui-navigation-design.md` (Brightness, Presets, and Test Pattern branches implemented — Custom/pattern verbs not yet; Brightness is rotary-only, Test Pattern is OLED-menu-only, neither has a keypad path)
 - `MacropadShared/src/led_test_pattern.h` — hardware-agnostic Test Pattern color/parity/phase sequencing, shared by both sketches (has a real `g++`-based test suite, no Arduino dependency)
-- `MacropadShared/src/i2c_protocol.h` — the Start/Stop/ACK command-byte constants both sketches agree on
+- `MacropadShared/src/i2c_protocol.h` — the Start/Stop/ACK command-byte constants both sketches agree on, plus the poll-interval/link-timeout constants behind the QT Py's host-link status LED
 - `qtpy_led_driver/outdoor_leds.h` — drives the two outdoor WS2812B strips from the QT Py's own GPIO, rendering the Test Pattern sequence
-- `qtpy_led_driver/i2c_commands.h` — QT Py-side (I2C peripheral on `Wire1`) Start/Stop command handling + ACK response
+- `qtpy_led_driver/i2c_commands.h` — QT Py-side (I2C peripheral on `Wire1`) Start/Stop command handling + ACK response; also tracks last-I2C-contact time for `isHostLinkAlive()`
+- `qtpy_led_driver/link_status_led.h` — drives the QT Py's own onboard NeoPixel solid red whenever `isHostLinkAlive()` reports no contact from the MacroPad within `QTPY_LINK_TIMEOUT_MS` (STEMMA QT unplugged, MacroPad off, etc.) — there's no dedicated heartbeat command, it reuses whatever I2C traffic already happens (the MacroPad's own presence probe, or a real Start/Stop)
 - `qtpy_led_driver/debug.h` — same modular debug macros as the MacroPad's `debug.h`, copied verbatim (each sketch needs its own copy; see `docs/superpowers/plans/2026-10-23-outdoor-led-driver-architecture.md`'s Task 4 for why it isn't shared via `MacropadShared` instead)
 
 **Modular serial debugging**: mirror `arduino-midi-3-pedal/debug.h` exactly —
