@@ -22,6 +22,9 @@ void setup() {
 }
 
 void loop() {
+  if (consumeCommandReceivedPending()) {
+    triggerCommandBlink();
+  }
   updateLinkStatusLed(isHostLinkAlive());
 
   bool running = isTestPatternRunning();
@@ -35,8 +38,9 @@ void loop() {
   }
 
   if (!running && _wasRunning) {
-    // Covers an explicit Stop and any unrecognized command byte alike —
-    // either way, "not running" is what should blank the strips.
+    // Only an explicit Stop gets here now (PING no longer implicitly stops
+    // a run — see i2c_commands.h) — either way, "not running" is what
+    // should blank the strips.
     clearOutdoorLeds();
     DEBUG_PRINTLN("Test Pattern: stopped");
   }

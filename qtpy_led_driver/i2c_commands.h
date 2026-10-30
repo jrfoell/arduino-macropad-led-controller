@@ -32,13 +32,22 @@
 //                              whatever command traffic already happens
 //                              (see i2c_protocol.h). Used by
 //                              link_status_led.h.
+//   consumeCommandReceivedPending() — call every loop(); returns true at
+//                              most once per received Start or Stop.
+//                              QTPY_CMD_PING deliberately never sets this —
+//                              it fires roughly once a second (the
+//                              MacroPad's presence probe), so counting it
+//                              would make the "command received" blink
+//                              effectively solid. Used by
+//                              link_status_led.h's triggerCommandBlink().
 
 #pragma once
 #include <Wire.h>
 #include "i2c_protocol.h"  // from MacropadShared
 
-static volatile bool _testPatternRunning = false;
-static volatile bool _startPending       = false;
+static volatile bool _testPatternRunning     = false;
+static volatile bool _startPending           = false;
+static volatile bool _commandReceivedPending = false;
 static volatile unsigned long _lastI2cActivityMs = 0;
 
 static void _onI2cReceive(int numBytes) {
@@ -59,12 +68,15 @@ static void _onI2cReceive(int numBytes) {
   if (cmd == QTPY_CMD_START) {
     _testPatternRunning = true;
     _startPending        = true;  // always re-latch the clock, even if already running
+    _commandReceivedPending = true;
   } else if (cmd == QTPY_CMD_STOP) {
     _testPatternRunning = false;
+    _commandReceivedPending = true;
   }
   // QTPY_CMD_PING (and anything else unrecognized): heartbeat already
-  // counted above; deliberately no effect on _testPatternRunning, so the
-  // presence probe can't interrupt a running Test Pattern.
+  // counted above; deliberately no effect on _testPatternRunning or
+  // _commandReceivedPending, so the presence probe can't interrupt a
+  // running Test Pattern or make the command-received blink solid.
 }
 
 static void _onI2cRequest() {
@@ -92,5 +104,11 @@ static inline bool isTestPatternRunning() {
 static inline bool consumeStartPending() {
   bool pending = _startPending;
   _startPending = false;
+  return pending;
+}
+
+static inline bool consumeCommandReceivedPending() {
+  bool pending = _commandReceivedPending;
+  _commandReceivedPending = false;
   return pending;
 }
