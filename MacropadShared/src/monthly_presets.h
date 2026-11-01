@@ -56,7 +56,7 @@ static inline uint32_t monthlyPresetScaleColor(uint32_t color, uint8_t percent) 
 // 0x00RRGGBB packing, matching colors.h / Adafruit_NeoPixel::Color() — full
 // intensity; monthlyPresetScaleColor() applies the confirmed brightness.
 #define MONTHLY_PRESET_OCTOBER_TOP_COLOR    ((uint32_t)0x00640096)  // Color(100,   0, 150) — purple
-// First cut was Color(200, 80, 0) (colors.h's PIXEL_ORANGE) — read as too
-// close to yellow on the real strips. Nudged toward red and a bit darker;
-// still tunable, this is a first adjustment pending feedback.
-#define MONTHLY_PRESET_OCTOBER_BOTTOM_COLOR ((uint32_t)0x00B43200)  // Color(180,  50,   0)
+// Color(200,80,0) [colors.h's PIXEL_ORANGE] -> Color(180,50,0) [too close to
+// yellow -> good step toward red] -> Color(160,20,0) [this one: the same
+// -20R/-30G/+0B delta applied again, for a deeper, more saturated red-orange].
+#define MONTHLY_PRESET_OCTOBER_BOTTOM_COLOR ((uint32_t)0x00A01400)  // Color(160,  20,   0)
