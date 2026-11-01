@@ -20,16 +20,20 @@
 //   showTestPatternOnOutdoorLeds(elapsedMs)   — render the Test Pattern
 //                                                sequence (led_test_pattern.h)
 //                                                at the given elapsed time
-//   showActiveSchemeOnOutdoorLeds(scheme, brightnessPercent) — render the
-//                                                given monthly scheme index
-//                                                (0-11, led_presets.h's
-//                                                numbering) at the given
-//                                                0-100 brightness. Only
-//                                                October (9) is implemented
-//                                                — anything else just turns
-//                                                both strips off, matching
-//                                                led_presets.h's own
-//                                                not-yet-decided months.
+//   showActiveSchemeOnOutdoorLeds(topColor, bottomColor, brightnessPercent)
+//                                                — render the given top-
+//                                                strip/bottom-strip colors
+//                                                (0x00RRGGBB, as sent by the
+//                                                MacroPad — see
+//                                                qtpy_led_driver.ino) at the
+//                                                given 0-100 brightness.
+//                                                No scheme knowledge lives
+//                                                here at all: the MacroPad
+//                                                is the sole authority on
+//                                                what any scheme looks
+//                                                like (led_presets.h) and
+//                                                sends colors directly, not
+//                                                a scheme index to look up.
 
 #pragma once
 #include <Adafruit_NeoPixel.h>
@@ -99,13 +103,10 @@ static inline void _renderMonthlyStrip(Adafruit_NeoPixel& strip, uint16_t count,
   strip.show();
 }
 
-static inline void showActiveSchemeOnOutdoorLeds(int schemeIndex, int brightnessPercent) {
-  if (schemeIndex == 9) {  // October — top (A1/stripB/12m) purple, bottom (A0/stripA/18m) orange
-    uint32_t topColor    = monthlyPresetScaleColor(MONTHLY_PRESET_OCTOBER_TOP_COLOR, brightnessPercent);
-    uint32_t bottomColor = monthlyPresetScaleColor(MONTHLY_PRESET_OCTOBER_BOTTOM_COLOR, brightnessPercent);
-    _renderMonthlyStrip(stripB, STRIP_B_LED_COUNT, topColor);
-    _renderMonthlyStrip(stripA, STRIP_A_LED_COUNT, bottomColor);
-  } else {
-    clearOutdoorLeds();  // not yet implemented for this month
-  }
+static inline void showActiveSchemeOnOutdoorLeds(uint32_t topColor, uint32_t bottomColor, int brightnessPercent) {
+  // Top = A1/stripB/12m/2nd floor, bottom = A0/stripA/18m/1st floor — see
+  // the "Pin assignment" comment above. "Off" colors (0,0,0) render as
+  // dark through this same math with no special-casing needed.
+  _renderMonthlyStrip(stripB, STRIP_B_LED_COUNT, monthlyPresetScaleColor(topColor, brightnessPercent));
+  _renderMonthlyStrip(stripA, STRIP_A_LED_COUNT, monthlyPresetScaleColor(bottomColor, brightnessPercent));
 }

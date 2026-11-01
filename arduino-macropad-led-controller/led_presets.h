@@ -1,18 +1,24 @@
 // led_presets.h
 // Defines the 12 monthly lighting schemes and runs whichever one is active.
-// Only October's actual *outdoor installation* behavior is decided and
-// implemented so far — the other 11 months are still an open design
-// question (see CLAUDE.md's "Open design questions"). The real outdoor
-// rendering doesn't happen here or via led_output.h, though: the MacroPad
-// doesn't drive the outdoor strips directly at all — on confirm,
-// ui_controller.h sends the scheme index + brightness to the QT Py over
-// I2C (qtpy_link.h's setActiveSchemeOnQtpy()), which renders and persists
-// it independently (qtpy_led_driver/outdoor_leds.h + scheme_storage.h).
-// getSchemePreviewColors() is this file's own piece: a color swatch per
-// month for the onboard keypad LEDs (see keypad_leds.h), used by
-// ui_controller.h as a live preview while browsing presets — for October
-// this now mirrors the real outdoor look (see its case below); for every
-// other month it's still just a rough prototype swatch.
+// This file is the SOLE authority on what any scheme actually looks like —
+// the QT Py has no compiled-in knowledge of "October" or any other month at
+// all; on confirm, ui_controller.h reads a scheme's colors from here
+// (getSchemeOutdoorColors()) and sends the full visual recipe to the QT Py
+// over I2C (qtpy_link.h's setActiveSchemeOnQtpy()), which just stores and
+// renders whatever it's told (qtpy_led_driver/outdoor_leds.h +
+// scheme_storage.h). That split means tuning a color only ever means
+// editing+reflashing the MacroPad — never the QT Py.
+//
+// Only October's actual outdoor look is decided so far — the other 11
+// months are still an open design question (see CLAUDE.md's "Open design
+// questions"); getSchemeOutdoorColors() returns "off" for anything else.
+//
+// getSchemePreviewColors() is a separate piece: a color swatch per month
+// for the onboard keypad LEDs (see keypad_leds.h), used by ui_controller.h
+// as a live preview while browsing presets — for October this now mirrors
+// the real outdoor look (same OCTOBER_*_COLOR constants as
+// getSchemeOutdoorColors(), so the two can't drift apart); for every other
+// month it's still just a rough prototype swatch.
 //
 // Exposes:
 //   initSchemes()                       — call once in setup()
@@ -22,14 +28,28 @@
 //                                          active scheme via led_output.h
 //   getSchemePreviewColors(index, out)  — fills out[NUM_NEOPIXEL] with a
 //                                          preview swatch for scheme `index`
+//   getSchemeOutdoorColors(index, outTop, outBottom) — fills in the real
+//                                          outdoor top-strip/bottom-strip
+//                                          colors for scheme `index` (0,0,0
+//                                          for both if that month isn't
+//                                          decided yet) — this is what gets
+//                                          sent to the QT Py, not a preview
 
 #pragma once
 
 #include "debug.h"
 #include "led_output.h"
 #include "colors.h"
-#include <monthly_presets.h>  // from MacropadShared — October's real colors, kept in sync with the strips
 #include <Adafruit_NeoPixel.h>
+
+// October's real outdoor colors — the single source of truth, used by both
+// getSchemeOutdoorColors() (sent to the QT Py) and getSchemePreviewColors()
+// (the keypad preview), so they can't drift apart when tuning further.
+#define OCTOBER_TOP_COLOR    ((uint32_t)0x00640096)  // Color(100,   0, 150) — purple
+// Color(200,80,0) -> Color(180,50,0) [too close to yellow -> good step
+// toward red] -> Color(160,20,0) [same -20R/-30G/+0B delta applied again,
+// for a deeper, more saturated red-orange].
+#define OCTOBER_BOTTOM_COLOR ((uint32_t)0x00A01400)  // Color(160,  20,   0)
 
 #define NUM_SCHEMES 12
 
@@ -57,6 +77,20 @@ static inline void setActiveScheme(int index) {
 
 static inline int getActiveScheme() {
   return _activeScheme;
+}
+
+// The real outdoor colors for scheme `schemeIndex` — what actually gets
+// sent to the QT Py (see this file's top comment). (0,0,0)/(0,0,0) for any
+// month whose visual design isn't decided yet, same as
+// getSchemePreviewColors()'s own default case.
+static inline void getSchemeOutdoorColors(int schemeIndex, uint32_t* outTopColor, uint32_t* outBottomColor) {
+  if (schemeIndex == 9) {  // October
+    *outTopColor    = OCTOBER_TOP_COLOR;
+    *outBottomColor = OCTOBER_BOTTOM_COLOR;
+  } else {
+    *outTopColor    = PIXEL_OFF;
+    *outBottomColor = PIXEL_OFF;
+  }
 }
 
 static inline void renderActiveScheme() {
@@ -147,16 +181,17 @@ static inline void getSchemePreviewColors(int schemeIndex, uint32_t out[NUM_NEOP
       _fillCycle(out, palette, 2);
       break;
     }
-    case 9: {  // October — IMPLEMENTED on the real strips (outdoor_leds.h's
-               // showActiveSchemeOnOutdoorLeds()): top strip (A1/12m/2nd
+    case 9: {  // October — IMPLEMENTED on the real strips (sent to the QT
+               // Py via getSchemeOutdoorColors()): top strip (A1/12m/2nd
                // floor) purple, bottom strip (A0/18m/1st floor) orange.
                // Mirrored here as top-2-rows/bottom-2-rows (not an
-               // alternating cycle), using MacropadShared's
-               // MONTHLY_PRESET_OCTOBER_*_COLOR directly (not colors.h's
-               // generic PIXEL_PURPLE/PIXEL_ORANGE) so this preview can
-               // never drift from what the strips actually show.
+               // alternating cycle), using this file's own
+               // OCTOBER_TOP_COLOR/OCTOBER_BOTTOM_COLOR directly (not
+               // colors.h's generic PIXEL_PURPLE/PIXEL_ORANGE, and the same
+               // constants getSchemeOutdoorColors() sends) so this preview
+               // can never drift from what the strips actually show.
       for (uint8_t i = 0; i < NUM_NEOPIXEL; i++) {
-        out[i] = (i < 6) ? MONTHLY_PRESET_OCTOBER_TOP_COLOR : MONTHLY_PRESET_OCTOBER_BOTTOM_COLOR;
+        out[i] = (i < 6) ? OCTOBER_TOP_COLOR : OCTOBER_BOTTOM_COLOR;
       }
       break;
     }

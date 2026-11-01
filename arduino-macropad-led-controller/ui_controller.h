@@ -33,6 +33,18 @@
 // keeps running via its own I2C-driven timer). Any input wakes it and is
 // still acted on normally, rather than being swallowed as "just a wake."
 //
+// The MacroPad is the sole authority on preset content ("instructor"); the
+// QT Py has no compiled-in knowledge of any scheme and just stores +
+// renders whatever recipe (colors, brightness) it's sent, persisting it to
+// its own flash (qtpy_link.h's setActiveSchemeOnQtpy(), sent on every
+// Preset and Brightness confirm). Tuning a color is therefore purely a
+// MacroPad-side change (led_presets.h) — the QT Py never needs reflashing
+// for content, only for logic changes. Two-way: entering the Presets menu
+// queries the QT Py for what it's actually showing
+// (queryActiveSchemeFromQtpy()) rather than trusting the MacroPad's own
+// copy, since the QT Py's own persisted state is the real source of truth
+// for what's physically outdoors.
+//
 // The MacroPad works fully with no QT Py attached — Brightness/Presets
 // never touch it, and Test Pattern degrades gracefully rather than failing:
 // selecting it always enters UI_MENU_TEST_PATTERN and always runs the
@@ -242,7 +254,9 @@ static inline void _uiConfirm() {
   } else if (_uiMenuState == UI_MENU_PRESET_LIST) {
     setActiveScheme(_uiPreviewMonth - 1);
     saveSettings(getActiveScheme(), _uiConfirmedBrightness);
-    setActiveSchemeOnQtpy(getActiveScheme(), _uiConfirmedBrightness);
+    uint32_t topColor, bottomColor;
+    getSchemeOutdoorColors(getActiveScheme(), &topColor, &bottomColor);
+    setActiveSchemeOnQtpy(getActiveScheme(), _uiConfirmedBrightness, topColor, bottomColor);
     clearKeypadLeds();
     _uiEntryState  = UI_ENTRY_IDLE;
     _uiMenuState   = UI_MENU_TOP;
@@ -250,10 +264,12 @@ static inline void _uiConfirm() {
   } else if (_uiMenuState == UI_MENU_BRIGHTNESS) {
     _uiConfirmedBrightness = _uiPendingBrightness;
     saveSettings(getActiveScheme(), _uiConfirmedBrightness);
-    // Same scheme, new brightness — this is the one command that persists
-    // on the QT Py side (previewBrightnessOnQtpy(), sent live while the
-    // knob was turning, deliberately never persists).
-    setActiveSchemeOnQtpy(getActiveScheme(), _uiConfirmedBrightness);
+    // Same scheme + colors, new brightness — this is the one command that
+    // persists on the QT Py side (previewBrightnessOnQtpy(), sent live
+    // while the knob was turning, deliberately never persists).
+    uint32_t topColor, bottomColor;
+    getSchemeOutdoorColors(getActiveScheme(), &topColor, &bottomColor);
+    setActiveSchemeOnQtpy(getActiveScheme(), _uiConfirmedBrightness, topColor, bottomColor);
     clearKeypadLeds();
     _uiMenuState   = UI_MENU_TOP;
     _uiHintUntilMs = 0;
@@ -264,6 +280,18 @@ static inline void _uiConfirm() {
       _uiPendingBrightness = _uiConfirmedBrightness;
       _uiUpdateBrightnessPreview();
     } else if (_uiTopHighlight == 1) {
+      // Two-way sync: ask the QT Py what it's actually showing before
+      // browsing starts, rather than trusting the MacroPad's own copy is
+      // still accurate (e.g. a QT Py swapped for a spare unit with its own
+      // persisted state). Silently keeps whatever _uiPreviewMonth already
+      // was if the QT Py doesn't answer — the MacroPad works fully without
+      // one attached.
+      int qScheme, qBrightness;
+      uint32_t qTopColor, qBottomColor;
+      if (queryActiveSchemeFromQtpy(&qScheme, &qBrightness, &qTopColor, &qBottomColor)
+          && qScheme >= 0 && qScheme < NUM_SCHEMES) {
+        _uiPreviewMonth = qScheme + 1;
+      }
       _uiMenuState = UI_MENU_PRESET_LIST;
       _uiUpdatePreview();
     } else if (_uiTopHighlight == 2) {

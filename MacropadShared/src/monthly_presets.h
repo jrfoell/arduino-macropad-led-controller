@@ -1,19 +1,21 @@
 // monthly_presets.h
-// Hardware-agnostic data/logic for the monthly outdoor LED presets, shared
-// by the MacroPad (keypad-LED preview, led_presets.h) and the QT Py (real
-// outdoor strip rendering, outdoor_leds.h + scheme_storage.h) — living here
-// rather than duplicated means the keypad preview can't silently drift out
-// of sync with what the strips actually show.
+// Hardware-agnostic *rendering math* for the monthly outdoor LED presets,
+// shared by the MacroPad (keypad-LED preview, led_presets.h) and the QT Py
+// (real outdoor strip rendering, outdoor_leds.h).
 //
-// Only October (scheme index 9, matching led_presets.h's SCHEME_NAMES
-// numbering) is implemented so far — every other month is future work, one
-// month at a time, same as led_presets.h's existing preview-only palette.
+// This file deliberately holds no per-month content (colors, which scheme
+// means what) — the MacroPad is the sole authority on that (see
+// led_presets.h) and sends the full visual recipe to the QT Py over I2C
+// (MacropadShared/src/i2c_protocol.h's QTPY_CMD_SET_SCHEME) rather than the
+// QT Py having its own compiled-in copy. That's the whole point: tuning a
+// color only ever means editing+reflashing the MacroPad, never the QT Py.
+// What's left here is just the math both sides still need to apply
+// whatever colors they're given identically.
 //
 // Exposes:
 //   MONTHLY_PRESET_LED_STRIDE    — every Nth outdoor LED is lit, spacing
 //                                  the lights out along the strip. Applies
-//                                  to every implemented month, not just
-//                                  October — a single global knob.
+//                                  to every scheme — a single global knob.
 //   monthlyPresetLedIsLit(i)     — true if outdoor LED index i should be
 //                                  lit under that stride
 //   monthlyPresetScaleColor(c, percent) — c scaled to percent (0-100) of
@@ -21,18 +23,6 @@
 //                                  the MacroPad's own colors.h, duplicated
 //                                  here since the QT Py sketch can't
 //                                  include that file
-//   MONTHLY_PRESET_OCTOBER_TOP_COLOR    — October's "top strip" (physically
-//                                  the 2nd floor, QT Py pad A1) color:
-//                                  purple — matches colors.h's PIXEL_PURPLE
-//   MONTHLY_PRESET_OCTOBER_BOTTOM_COLOR — October's "bottom strip"
-//                                  (1st floor, QT Py pad A0) color: a
-//                                  red-leaning, slightly darker orange —
-//                                  tuned after seeing colors.h's plain
-//                                  PIXEL_ORANGE read as too close to yellow
-//                                  on real hardware; led_presets.h's
-//                                  October preview uses this exact value
-//                                  too (not PIXEL_ORANGE) so the two can't
-//                                  drift apart again
 
 #pragma once
 #include <stdint.h>
@@ -52,11 +42,3 @@ static inline uint32_t monthlyPresetScaleColor(uint32_t color, uint8_t percent) 
   b = (uint16_t)b * percent / 100;
   return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
 }
-
-// 0x00RRGGBB packing, matching colors.h / Adafruit_NeoPixel::Color() — full
-// intensity; monthlyPresetScaleColor() applies the confirmed brightness.
-#define MONTHLY_PRESET_OCTOBER_TOP_COLOR    ((uint32_t)0x00640096)  // Color(100,   0, 150) — purple
-// Color(200,80,0) [colors.h's PIXEL_ORANGE] -> Color(180,50,0) [too close to
-// yellow -> good step toward red] -> Color(160,20,0) [this one: the same
-// -20R/-30G/+0B delta applied again, for a deeper, more saturated red-orange].
-#define MONTHLY_PRESET_OCTOBER_BOTTOM_COLOR ((uint32_t)0x00A01400)  // Color(160,  20,   0)

@@ -38,21 +38,35 @@
 //                              QT Py but whose ACK didn't reach us must not
 //                              leave it running unseen.
 //   stopTestPatternOnQtpy()  — fire-and-forget, no response expected
-//   setActiveSchemeOnQtpy(scheme, brightnessPercent) — fire-and-forget, no
-//                              response expected, like stopTestPatternOnQtpy()
-//                              — a preset selection already fully applies on
-//                              the MacroPad's own side (flash + keypad)
+//   setActiveSchemeOnQtpy(scheme, brightnessPercent, topColor, bottomColor)
+//                              — fire-and-forget, no response expected,
+//                              like stopTestPatternOnQtpy() — a preset
+//                              selection already fully applies on the
+//                              MacroPad's own side (flash + keypad)
 //                              regardless of QT Py reachability, so this
 //                              call isn't allowed to block or fail the
 //                              confirm action. Also what to call on a
-//                              Brightness confirm (same scheme, new
-//                              brightness) — it's the only command that
-//                              persists on the QT Py side.
+//                              Brightness confirm (same scheme + colors,
+//                              new brightness) — it's the only command
+//                              that persists on the QT Py side. topColor/
+//                              bottomColor come from led_presets.h's
+//                              getSchemeOutdoorColors() — the MacroPad is
+//                              the sole authority on scheme content, the QT
+//                              Py has none of its own.
 //   previewBrightnessOnQtpy(brightnessPercent) — fire-and-forget, sent on
 //                              every Brightness-knob detent while turning
 //                              it (not just on confirm) so the real strips
 //                              update live; the QT Py applies this to RAM
 //                              only, never flash — see i2c_protocol.h
+//   queryActiveSchemeFromQtpy(outScheme, outBrightness, outTopColor,
+//                              outBottomColor) — two-way communication, the
+//                              other half of setActiveSchemeOnQtpy(): reads
+//                              back what the QT Py is actually
+//                              showing/persisted right now (its own
+//                              EEPROM-backed state, which is the real
+//                              source of truth for what's physically
+//                              outdoors). Returns false (outputs
+//                              untouched) if the QT Py didn't respond.
 
 #pragma once
 #include <Wire.h>
@@ -82,12 +96,39 @@ static inline void stopTestPatternOnQtpy() {
   Wire.endTransmission();
 }
 
-static inline void setActiveSchemeOnQtpy(int schemeIndex, int brightnessPercent) {
+static inline void setActiveSchemeOnQtpy(int schemeIndex, int brightnessPercent, uint32_t topColor, uint32_t bottomColor) {
   Wire.beginTransmission(QTPY_I2C_ADDRESS);
   Wire.write(QTPY_CMD_SET_SCHEME);
   Wire.write((uint8_t)schemeIndex);
   Wire.write((uint8_t)brightnessPercent);
+  Wire.write((uint8_t)(topColor >> 16));
+  Wire.write((uint8_t)(topColor >> 8));
+  Wire.write((uint8_t)topColor);
+  Wire.write((uint8_t)(bottomColor >> 16));
+  Wire.write((uint8_t)(bottomColor >> 8));
+  Wire.write((uint8_t)bottomColor);
   Wire.endTransmission();
+}
+
+// See i2c_protocol.h's QTPY_CMD_QUERY_SCHEME for the wire format.
+static inline bool queryActiveSchemeFromQtpy(int* outScheme, int* outBrightness, uint32_t* outTopColor, uint32_t* outBottomColor) {
+  Wire.beginTransmission(QTPY_I2C_ADDRESS);
+  Wire.write(QTPY_CMD_QUERY_SCHEME);
+  if (Wire.endTransmission() != 0) {
+    return false;
+  }
+
+  Wire.requestFrom(QTPY_I2C_ADDRESS, 8);
+  if (Wire.available() < 8) {
+    return false;
+  }
+  *outScheme     = Wire.read();
+  *outBrightness = Wire.read();
+  uint8_t topR = Wire.read(), topG = Wire.read(), topB = Wire.read();
+  uint8_t bottomR = Wire.read(), bottomG = Wire.read(), bottomB = Wire.read();
+  *outTopColor    = ((uint32_t)topR << 16)    | ((uint32_t)topG << 8)    | topB;
+  *outBottomColor = ((uint32_t)bottomR << 16) | ((uint32_t)bottomG << 8) | bottomB;
+  return true;
 }
 
 static inline void previewBrightnessOnQtpy(int brightnessPercent) {
