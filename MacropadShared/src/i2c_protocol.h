@@ -25,6 +25,18 @@
 //                          hardware-level address ACK, unrelated to
 //                          firmware) but will NOT register as contact
 //                          for QTPY_LINK_TIMEOUT_MS below.
+//   QTPY_CMD_SET_SCHEME  — set + persist the QT Py's active monthly scheme.
+//                          Fire-and-forget (no ACK read), like Stop — the
+//                          MacroPad's own scheme selection already applies
+//                          to its own flash/keypad regardless of the QT
+//                          Py's reachability (see "The MacroPad works
+//                          fully with no QT Py attached" in
+//                          ui_controller.h). Payload is exactly 2 bytes
+//                          after the command byte: scheme index (0-11,
+//                          same numbering as the MacroPad's led_presets.h)
+//                          then brightness percent (0-100) — see
+//                          qtpy_led_driver/scheme_storage.h for what the QT
+//                          Py does with it.
 //   QTPY_ACK_BYTE        — the fixed response byte to QTPY_CMD_START
 //   QTPY_STATUS_POLL_MS  — how often the MacroPad probes for QT Py presence
 //                          (ui_controller.h's corner icon) — defined here,
@@ -47,6 +59,7 @@
 #define QTPY_CMD_STOP        0x00
 #define QTPY_CMD_START       0x01
 #define QTPY_CMD_PING        0x02
+#define QTPY_CMD_SET_SCHEME  0x03
 #define QTPY_ACK_BYTE        0xAC
 #define QTPY_STATUS_POLL_MS  1000
 #define QTPY_LINK_TIMEOUT_MS (3 * QTPY_STATUS_POLL_MS)

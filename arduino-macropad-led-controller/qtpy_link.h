@@ -38,6 +38,13 @@
 //                              QT Py but whose ACK didn't reach us must not
 //                              leave it running unseen.
 //   stopTestPatternOnQtpy()  — fire-and-forget, no response expected
+//   setActiveSchemeOnQtpy(scheme, brightnessPercent) — fire-and-forget, no
+//                              response expected, like stopTestPatternOnQtpy()
+//                              — a preset selection already fully applies on
+//                              the MacroPad's own side (flash + keypad)
+//                              regardless of QT Py reachability, so this
+//                              call isn't allowed to block or fail the
+//                              confirm action
 
 #pragma once
 #include <Wire.h>
@@ -64,6 +71,14 @@ static inline bool isQtpyConnected() {
 static inline void stopTestPatternOnQtpy() {
   Wire.beginTransmission(QTPY_I2C_ADDRESS);
   Wire.write(QTPY_CMD_STOP);
+  Wire.endTransmission();
+}
+
+static inline void setActiveSchemeOnQtpy(int schemeIndex, int brightnessPercent) {
+  Wire.beginTransmission(QTPY_I2C_ADDRESS);
+  Wire.write(QTPY_CMD_SET_SCHEME);
+  Wire.write((uint8_t)schemeIndex);
+  Wire.write((uint8_t)brightnessPercent);
   Wire.endTransmission();
 }
 

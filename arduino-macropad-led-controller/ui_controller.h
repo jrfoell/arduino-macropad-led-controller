@@ -242,6 +242,7 @@ static inline void _uiConfirm() {
   } else if (_uiMenuState == UI_MENU_PRESET_LIST) {
     setActiveScheme(_uiPreviewMonth - 1);
     saveSettings(getActiveScheme(), _uiConfirmedBrightness);
+    setActiveSchemeOnQtpy(getActiveScheme(), _uiConfirmedBrightness);
     clearKeypadLeds();
     _uiEntryState  = UI_ENTRY_IDLE;
     _uiMenuState   = UI_MENU_TOP;

@@ -9,15 +9,25 @@
 #include "outdoor_leds.h"
 #include "i2c_commands.h"
 #include "link_status_led.h"
+#include "scheme_storage.h"
 
 static unsigned long _testPatternStartMs = 0;
 static bool _wasRunning = false;
+static int  _activeScheme     = 0;
+static int  _activeBrightness = 100;
+
+static inline void _showActiveScheme() {
+  showActiveSchemeOnOutdoorLeds(_activeScheme, _activeBrightness);
+}
 
 void setup() {
   DEBUG_BEGIN(115200);
+  initSchemeStorage();
+  loadScheme(&_activeScheme, &_activeBrightness);
   initOutdoorLeds();
   initI2cCommands();
   initLinkStatusLed();
+  _showActiveScheme();  // the default program at power-up, with no MacroPad involved
   DEBUG_PRINTLN("QT Py LED driver: initialized");
 }
 
@@ -26,6 +36,20 @@ void loop() {
     triggerCommandBlink();
   }
   updateLinkStatusLed(isHostLinkAlive());
+
+  int newScheme, newBrightness;
+  if (consumeSchemeChange(&newScheme, &newBrightness)) {
+    _activeScheme     = newScheme;
+    _activeBrightness = newBrightness;
+    saveScheme(_activeScheme, _activeBrightness);
+    // Don't fight a running Test Pattern for the strips — in practice this
+    // can't happen through the MacroPad's own UI anyway (selecting a
+    // Preset always exits Test Pattern, sending Stop, first), but render
+    // only once that's actually settled rather than assuming the ordering.
+    if (!isTestPatternRunning()) {
+      _showActiveScheme();
+    }
+  }
 
   bool running = isTestPatternRunning();
 
@@ -39,10 +63,10 @@ void loop() {
 
   if (!running && _wasRunning) {
     // Only an explicit Stop gets here now (PING no longer implicitly stops
-    // a run — see i2c_commands.h) — either way, "not running" is what
-    // should blank the strips.
-    clearOutdoorLeds();
-    DEBUG_PRINTLN("Test Pattern: stopped");
+    // a run — see i2c_commands.h). Resume whatever the installation is
+    // actually supposed to be showing, rather than going dark.
+    DEBUG_PRINTLN("Test Pattern: stopped, resuming active scheme");
+    _showActiveScheme();
   }
 
   if (running) {

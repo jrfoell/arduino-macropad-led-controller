@@ -1,12 +1,18 @@
 // led_presets.h
 // Defines the 12 monthly lighting schemes and runs whichever one is active.
-// Each month's actual *outdoor installation* behavior is still an open
-// design question (see CLAUDE.md's "Open design questions") — active-scheme
-// selection and the per-loop render hook are scaffolding pending
-// led_output.h. getSchemePreviewColors() is a separate, already-implemented
-// piece: a rough color swatch per month for the onboard keypad LEDs (see
-// keypad_leds.h), used by ui_controller.h as a live preview while browsing
-// presets — NOT the final outdoor look.
+// Only October's actual *outdoor installation* behavior is decided and
+// implemented so far — the other 11 months are still an open design
+// question (see CLAUDE.md's "Open design questions"). The real outdoor
+// rendering doesn't happen here or via led_output.h, though: the MacroPad
+// doesn't drive the outdoor strips directly at all — on confirm,
+// ui_controller.h sends the scheme index + brightness to the QT Py over
+// I2C (qtpy_link.h's setActiveSchemeOnQtpy()), which renders and persists
+// it independently (qtpy_led_driver/outdoor_leds.h + scheme_storage.h).
+// getSchemePreviewColors() is this file's own piece: a color swatch per
+// month for the onboard keypad LEDs (see keypad_leds.h), used by
+// ui_controller.h as a live preview while browsing presets — for October
+// this now mirrors the real outdoor look (see its case below); for every
+// other month it's still just a rough prototype swatch.
 //
 // Exposes:
 //   initSchemes()                       — call once in setup()
@@ -53,8 +59,11 @@ static inline int getActiveScheme() {
 }
 
 static inline void renderActiveScheme() {
-  // TODO: dispatch to per-scheme render logic once each month's design and
-  // led_output.h are implemented.
+  // Intentionally empty, not just pending: the MacroPad never drives the
+  // outdoor strips directly (see this file's top comment) — there's
+  // nothing for a per-loop MacroPad-side render hook to do. Kept as a
+  // no-op rather than removed so the .ino's existing call site doesn't
+  // need touching if that ever changes.
 }
 
 // ─── Keypad-LED preview swatches ────────────────────────────────────────────
@@ -137,9 +146,16 @@ static inline void getSchemePreviewColors(int schemeIndex, uint32_t out[NUM_NEOP
       _fillCycle(out, palette, 2);
       break;
     }
-    case 9: {  // October — Orange & Purple
-      static const uint32_t palette[] = { PIXEL_ORANGE, PIXEL_PURPLE };
-      _fillCycle(out, palette, 2);
+    case 9: {  // October — IMPLEMENTED on the real strips (outdoor_leds.h's
+               // showActiveSchemeOnOutdoorLeds(), MacropadShared's
+               // monthly_presets.h): top strip (A1/12m/2nd floor) purple,
+               // bottom strip (A0/18m/1st floor) orange. Mirrored here as
+               // top-2-rows/bottom-2-rows (not an alternating cycle) so the
+               // keypad preview actually looks like what the strips show,
+               // not just a thematically-similar swatch.
+      for (uint8_t i = 0; i < NUM_NEOPIXEL; i++) {
+        out[i] = (i < 6) ? PIXEL_PURPLE : PIXEL_ORANGE;
+      }
       break;
     }
     case 10: {  // November — Orange & Yellow

@@ -33,21 +33,30 @@
 //                              (see i2c_protocol.h). Used by
 //                              link_status_led.h.
 //   consumeCommandReceivedPending() — call every loop(); returns true at
-//                              most once per received Start or Stop.
-//                              QTPY_CMD_PING deliberately never sets this —
-//                              it fires roughly once a second (the
-//                              MacroPad's presence probe), so counting it
-//                              would make the "command received" blink
+//                              most once per received Start, Stop, or
+//                              SetScheme. QTPY_CMD_PING deliberately never
+//                              sets this — it fires roughly once a second
+//                              (the MacroPad's presence probe), so counting
+//                              it would make the "command received" blink
 //                              effectively solid. Used by
 //                              link_status_led.h's triggerCommandBlink().
+//   consumeSchemeChange(outScheme, outBrightness) — call every loop();
+//                              true at most once per received
+//                              QTPY_CMD_SET_SCHEME, filling in the 0-11
+//                              scheme index and 0-100 brightness it
+//                              carried. See scheme_storage.h for what to
+//                              do with them (persist + render).
 
 #pragma once
 #include <Wire.h>
 #include "i2c_protocol.h"  // from MacropadShared
 
-static volatile bool _testPatternRunning     = false;
-static volatile bool _startPending           = false;
-static volatile bool _commandReceivedPending = false;
+static volatile bool    _testPatternRunning     = false;
+static volatile bool    _startPending           = false;
+static volatile bool    _commandReceivedPending = false;
+static volatile bool    _schemeChangePending    = false;
+static volatile uint8_t _pendingSchemeIndex     = 0;
+static volatile uint8_t _pendingBrightness      = 100;
 static volatile unsigned long _lastI2cActivityMs = 0;
 
 static void _onI2cReceive(int numBytes) {
@@ -61,9 +70,6 @@ static void _onI2cReceive(int numBytes) {
   }
   _lastI2cActivityMs = millis();
   uint8_t cmd = Wire1.read();
-  while (Wire1.available()) {
-    Wire1.read();  // drain any extra bytes
-  }
 
   if (cmd == QTPY_CMD_START) {
     _testPatternRunning = true;
@@ -72,11 +78,20 @@ static void _onI2cReceive(int numBytes) {
   } else if (cmd == QTPY_CMD_STOP) {
     _testPatternRunning = false;
     _commandReceivedPending = true;
+  } else if (cmd == QTPY_CMD_SET_SCHEME && Wire1.available() >= 2) {
+    _pendingSchemeIndex  = Wire1.read();
+    _pendingBrightness   = Wire1.read();
+    _schemeChangePending = true;
+    _commandReceivedPending = true;
   }
-  // QTPY_CMD_PING (and anything else unrecognized): heartbeat already
-  // counted above; deliberately no effect on _testPatternRunning or
-  // _commandReceivedPending, so the presence probe can't interrupt a
-  // running Test Pattern or make the command-received blink solid.
+  // QTPY_CMD_PING (and anything else unrecognized, or a malformed
+  // SET_SCHEME short on payload bytes): heartbeat already counted above;
+  // deliberately no effect on run state or the command-received blink, so
+  // the presence probe can't interrupt a running Test Pattern.
+
+  while (Wire1.available()) {
+    Wire1.read();  // drain any unexpected extra bytes
+  }
 }
 
 static void _onI2cRequest() {
@@ -111,4 +126,14 @@ static inline bool consumeCommandReceivedPending() {
   bool pending = _commandReceivedPending;
   _commandReceivedPending = false;
   return pending;
+}
+
+static inline bool consumeSchemeChange(int* outScheme, int* outBrightness) {
+  if (!_schemeChangePending) {
+    return false;
+  }
+  _schemeChangePending = false;
+  *outScheme     = _pendingSchemeIndex;
+  *outBrightness = _pendingBrightness;
+  return true;
 }

@@ -2,6 +2,9 @@
 // Drives the two outdoor WS2812B strips (18m/540-LED "strip A" and
 // 12m/360-LED "strip B") from the QT Py RP2040's own PIO-capable GPIO
 // pins, feeding the QuinLED Diff-Adv Sender-4's two data input channels.
+// Two independent render sources share these same two strips: the Test
+// Pattern diagnostic sequence, and the active monthly preset (normal
+// operation) — see qtpy_led_driver.ino for how the two take turns.
 // See docs/superpowers/specs/2026-10-23-outdoor-led-driver-architecture-design.md.
 //
 // Exposes:
@@ -17,10 +20,21 @@
 //   showTestPatternOnOutdoorLeds(elapsedMs)   — render the Test Pattern
 //                                                sequence (led_test_pattern.h)
 //                                                at the given elapsed time
+//   showActiveSchemeOnOutdoorLeds(scheme, brightnessPercent) — render the
+//                                                given monthly scheme index
+//                                                (0-11, led_presets.h's
+//                                                numbering) at the given
+//                                                0-100 brightness. Only
+//                                                October (9) is implemented
+//                                                — anything else just turns
+//                                                both strips off, matching
+//                                                led_presets.h's own
+//                                                not-yet-decided months.
 
 #pragma once
 #include <Adafruit_NeoPixel.h>
 #include "led_test_pattern.h"
+#include "monthly_presets.h"
 
 // Pin assignment is confirmed (not just a placeholder): QT Py "A0"/"A1"
 // pads (GPIO29/GPIO28 per arduino-pico's adafruit_qtpy variant header),
@@ -76,4 +90,22 @@ static inline void showTestPatternOnOutdoorLeds(unsigned long elapsedMs) {
 
   _renderOutdoorStrip(stripA, STRIP_A_LED_COUNT, color, phase.evenParityLit);
   _renderOutdoorStrip(stripB, STRIP_B_LED_COUNT, color, phase.evenParityLit);
+}
+
+static inline void _renderMonthlyStrip(Adafruit_NeoPixel& strip, uint16_t count, uint32_t color) {
+  for (uint16_t i = 0; i < count; i++) {
+    strip.setPixelColor(i, monthlyPresetLedIsLit(i) ? color : 0);
+  }
+  strip.show();
+}
+
+static inline void showActiveSchemeOnOutdoorLeds(int schemeIndex, int brightnessPercent) {
+  if (schemeIndex == 9) {  // October — top (A1/stripB/12m) purple, bottom (A0/stripA/18m) orange
+    uint32_t topColor    = monthlyPresetScaleColor(MONTHLY_PRESET_OCTOBER_TOP_COLOR, brightnessPercent);
+    uint32_t bottomColor = monthlyPresetScaleColor(MONTHLY_PRESET_OCTOBER_BOTTOM_COLOR, brightnessPercent);
+    _renderMonthlyStrip(stripB, STRIP_B_LED_COUNT, topColor);
+    _renderMonthlyStrip(stripA, STRIP_A_LED_COUNT, bottomColor);
+  } else {
+    clearOutdoorLeds();  // not yet implemented for this month
+  }
 }
