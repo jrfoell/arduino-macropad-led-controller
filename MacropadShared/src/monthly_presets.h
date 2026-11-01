@@ -16,8 +16,16 @@
 //   MONTHLY_PRESET_LED_STRIDE    — every Nth outdoor LED is lit, spacing
 //                                  the lights out along the strip. Applies
 //                                  to every scheme — a single global knob.
-//   monthlyPresetLedIsLit(i)     — true if outdoor LED index i should be
-//                                  lit under that stride
+//   monthlyPresetLedIsLit(i, offset) — true if outdoor LED index i should
+//                                  be lit under that stride, shifted by
+//                                  `offset` (0..stride-1). The QT Py
+//                                  advances this once per boot
+//                                  (scheme_storage.h's
+//                                  loadAndAdvanceLedOffset()) so it isn't
+//                                  always the same physical LEDs doing the
+//                                  work — spreads wear/usage hours evenly
+//                                  and helps surface a dead LED instead of
+//                                  it silently always being a dark one.
 //   monthlyPresetScaleColor(c, percent) — c scaled to percent (0-100) of
 //                                  its original brightness; same math as
 //                                  the MacroPad's own colors.h, duplicated
@@ -29,8 +37,8 @@
 
 #define MONTHLY_PRESET_LED_STRIDE 3  // every 3rd LED lit, spacing the lights out
 
-static inline bool monthlyPresetLedIsLit(uint16_t ledIndex) {
-  return (ledIndex % MONTHLY_PRESET_LED_STRIDE) == 0;
+static inline bool monthlyPresetLedIsLit(uint16_t ledIndex, uint8_t offset) {
+  return (ledIndex % MONTHLY_PRESET_LED_STRIDE) == (offset % MONTHLY_PRESET_LED_STRIDE);
 }
 
 static inline uint32_t monthlyPresetScaleColor(uint32_t color, uint8_t percent) {

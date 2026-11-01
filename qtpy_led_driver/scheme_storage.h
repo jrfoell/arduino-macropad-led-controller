@@ -22,6 +22,21 @@
 //                                           received QTPY_CMD_SET_SCHEME;
 //                                           writes through to flash
 //                                           immediately
+//   loadAndAdvanceLedOffset(stride)      — call once in setup(), after
+//                                           initSchemeStorage(): returns
+//                                           the LED-pattern offset
+//                                           (0..stride-1) to use THIS boot,
+//                                           and persists the next one
+//                                           (current+1 mod stride) so the
+//                                           lit LEDs shift by one each
+//                                           power-up — see
+//                                           MacropadShared/src/monthly_presets.h's
+//                                           monthlyPresetLedIsLit(). Needs
+//                                           no magic-byte/"ever saved"
+//                                           check unlike the scheme fields
+//                                           above: any raw byte, including
+//                                           fresh/erased flash, reduces to
+//                                           a valid offset via `% stride`.
 
 #pragma once
 
@@ -40,6 +55,7 @@
 #define SCHEME_ADDR_BOTTOM_R   6
 #define SCHEME_ADDR_BOTTOM_G   7
 #define SCHEME_ADDR_BOTTOM_B   8
+#define SCHEME_ADDR_LED_OFFSET 9
 
 static inline void initSchemeStorage() {
   EEPROM.begin(SCHEME_EEPROM_SIZE);
@@ -82,4 +98,12 @@ static inline void saveScheme(int scheme, int brightness, uint32_t topColor, uin
   EEPROM.commit();
   DEBUG_PRINT("Scheme storage: saved scheme="); DEBUG_PRINT(scheme);
   DEBUG_PRINT(" brightness="); DEBUG_PRINTLN(brightness);
+}
+
+static inline uint8_t loadAndAdvanceLedOffset(uint8_t stride) {
+  uint8_t offset = EEPROM.read(SCHEME_ADDR_LED_OFFSET) % stride;
+  EEPROM.write(SCHEME_ADDR_LED_OFFSET, (offset + 1) % stride);
+  EEPROM.commit();
+  DEBUG_PRINT("Scheme storage: LED offset this boot="); DEBUG_PRINTLN(offset);
+  return offset;
 }

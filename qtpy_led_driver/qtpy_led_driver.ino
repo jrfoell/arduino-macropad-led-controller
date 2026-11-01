@@ -17,12 +17,18 @@ static int      _activeScheme     = 0;
 static int      _activeBrightness = 100;
 static uint32_t _activeTopColor    = 0;
 static uint32_t _activeBottomColor = 0;
+// Fixed for this boot session — rolls to the next value in setup() and
+// isn't touched again until the next power-up/reflash. See
+// scheme_storage.h's loadAndAdvanceLedOffset(): this is what spreads wear
+// across the strip over successive boots rather than always lighting the
+// same physical LEDs.
+static uint8_t  _ledOffset = 0;
 
 // No scheme knowledge lives here — this just renders whatever colors are
 // currently active and keeps the query-response state (i2c_commands.h) in
 // sync, so QTPY_CMD_QUERY_SCHEME always answers with the truth.
 static inline void _showActiveScheme() {
-  showActiveSchemeOnOutdoorLeds(_activeTopColor, _activeBottomColor, _activeBrightness);
+  showActiveSchemeOnOutdoorLeds(_activeTopColor, _activeBottomColor, _activeBrightness, _ledOffset);
   setQueryableSchemeState(_activeScheme, _activeBrightness, _activeTopColor, _activeBottomColor);
 }
 
@@ -30,6 +36,7 @@ void setup() {
   DEBUG_BEGIN(115200);
   initSchemeStorage();
   loadScheme(&_activeScheme, &_activeBrightness, &_activeTopColor, &_activeBottomColor);
+  _ledOffset = loadAndAdvanceLedOffset(MONTHLY_PRESET_LED_STRIDE);
   initOutdoorLeds();
   initI2cCommands();
   initLinkStatusLed();
