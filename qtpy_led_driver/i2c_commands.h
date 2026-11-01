@@ -46,17 +46,25 @@
 //                              scheme index and 0-100 brightness it
 //                              carried. See scheme_storage.h for what to
 //                              do with them (persist + render).
+//   consumeBrightnessPreview(outBrightness) — call every loop(); true at
+//                              most once per received
+//                              QTPY_CMD_PREVIEW_BRIGHTNESS, filling in the
+//                              0-100 brightness it carried. Apply
+//                              immediately to the current render; never
+//                              persist (see i2c_protocol.h).
 
 #pragma once
 #include <Wire.h>
 #include "i2c_protocol.h"  // from MacropadShared
 
-static volatile bool    _testPatternRunning     = false;
-static volatile bool    _startPending           = false;
-static volatile bool    _commandReceivedPending = false;
-static volatile bool    _schemeChangePending    = false;
-static volatile uint8_t _pendingSchemeIndex     = 0;
-static volatile uint8_t _pendingBrightness      = 100;
+static volatile bool    _testPatternRunning      = false;
+static volatile bool    _startPending            = false;
+static volatile bool    _commandReceivedPending  = false;
+static volatile bool    _schemeChangePending     = false;
+static volatile uint8_t _pendingSchemeIndex      = 0;
+static volatile uint8_t _pendingBrightness       = 100;
+static volatile bool    _brightnessPreviewPending = false;
+static volatile uint8_t _pendingPreviewBrightness = 100;
 static volatile unsigned long _lastI2cActivityMs = 0;
 
 static void _onI2cReceive(int numBytes) {
@@ -83,11 +91,17 @@ static void _onI2cReceive(int numBytes) {
     _pendingBrightness   = Wire1.read();
     _schemeChangePending = true;
     _commandReceivedPending = true;
+  } else if (cmd == QTPY_CMD_PREVIEW_BRIGHTNESS && Wire1.available() >= 1) {
+    _pendingPreviewBrightness = Wire1.read();
+    _brightnessPreviewPending = true;
+    // Deliberately NOT setting _commandReceivedPending — see
+    // i2c_protocol.h: this fires on every encoder detent while the knob
+    // turns, which would read as a solid-green glitch, not a blink.
   }
-  // QTPY_CMD_PING (and anything else unrecognized, or a malformed
-  // SET_SCHEME short on payload bytes): heartbeat already counted above;
-  // deliberately no effect on run state or the command-received blink, so
-  // the presence probe can't interrupt a running Test Pattern.
+  // QTPY_CMD_PING (and anything else unrecognized, or a malformed payload
+  // short on bytes): heartbeat already counted above; deliberately no
+  // effect on run state or the command-received blink, so the presence
+  // probe can't interrupt a running Test Pattern.
 
   while (Wire1.available()) {
     Wire1.read();  // drain any unexpected extra bytes
@@ -135,5 +149,14 @@ static inline bool consumeSchemeChange(int* outScheme, int* outBrightness) {
   _schemeChangePending = false;
   *outScheme     = _pendingSchemeIndex;
   *outBrightness = _pendingBrightness;
+  return true;
+}
+
+static inline bool consumeBrightnessPreview(int* outBrightness) {
+  if (!_brightnessPreviewPending) {
+    return false;
+  }
+  _brightnessPreviewPending = false;
+  *outBrightness = _pendingPreviewBrightness;
   return true;
 }

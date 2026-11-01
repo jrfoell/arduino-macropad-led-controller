@@ -51,6 +51,17 @@ void loop() {
     }
   }
 
+  int previewBrightness;
+  if (consumeBrightnessPreview(&previewBrightness)) {
+    // RAM only — never saveScheme() here. The knob can send many of these
+    // per second while turning; QTPY_CMD_SET_SCHEME (above) is what
+    // persists, sent once when the MacroPad confirms.
+    _activeBrightness = previewBrightness;
+    if (!isTestPatternRunning()) {
+      _showActiveScheme();
+    }
+  }
+
   bool running = isTestPatternRunning();
 
   // consumeStartPending() is true on every received Start, including one

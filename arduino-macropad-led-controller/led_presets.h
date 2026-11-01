@@ -28,6 +28,7 @@
 #include "debug.h"
 #include "led_output.h"
 #include "colors.h"
+#include <monthly_presets.h>  // from MacropadShared — October's real colors, kept in sync with the strips
 #include <Adafruit_NeoPixel.h>
 
 #define NUM_SCHEMES 12
@@ -147,14 +148,15 @@ static inline void getSchemePreviewColors(int schemeIndex, uint32_t out[NUM_NEOP
       break;
     }
     case 9: {  // October — IMPLEMENTED on the real strips (outdoor_leds.h's
-               // showActiveSchemeOnOutdoorLeds(), MacropadShared's
-               // monthly_presets.h): top strip (A1/12m/2nd floor) purple,
-               // bottom strip (A0/18m/1st floor) orange. Mirrored here as
-               // top-2-rows/bottom-2-rows (not an alternating cycle) so the
-               // keypad preview actually looks like what the strips show,
-               // not just a thematically-similar swatch.
+               // showActiveSchemeOnOutdoorLeds()): top strip (A1/12m/2nd
+               // floor) purple, bottom strip (A0/18m/1st floor) orange.
+               // Mirrored here as top-2-rows/bottom-2-rows (not an
+               // alternating cycle), using MacropadShared's
+               // MONTHLY_PRESET_OCTOBER_*_COLOR directly (not colors.h's
+               // generic PIXEL_PURPLE/PIXEL_ORANGE) so this preview can
+               // never drift from what the strips actually show.
       for (uint8_t i = 0; i < NUM_NEOPIXEL; i++) {
-        out[i] = (i < 6) ? PIXEL_PURPLE : PIXEL_ORANGE;
+        out[i] = (i < 6) ? MONTHLY_PRESET_OCTOBER_TOP_COLOR : MONTHLY_PRESET_OCTOBER_BOTTOM_COLOR;
       }
       break;
     }

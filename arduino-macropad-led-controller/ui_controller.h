@@ -249,10 +249,11 @@ static inline void _uiConfirm() {
     _uiHintUntilMs = 0;
   } else if (_uiMenuState == UI_MENU_BRIGHTNESS) {
     _uiConfirmedBrightness = _uiPendingBrightness;
-    // TODO: apply to the outdoor installation — no led_output.h API exists
-    // yet to call, see "Persistence" in the design doc. Flash persistence
-    // itself is real, below.
     saveSettings(getActiveScheme(), _uiConfirmedBrightness);
+    // Same scheme, new brightness — this is the one command that persists
+    // on the QT Py side (previewBrightnessOnQtpy(), sent live while the
+    // knob was turning, deliberately never persists).
+    setActiveSchemeOnQtpy(getActiveScheme(), _uiConfirmedBrightness);
     clearKeypadLeds();
     _uiMenuState   = UI_MENU_TOP;
     _uiHintUntilMs = 0;
@@ -418,6 +419,7 @@ static inline void updateUiController() {
       if (brightness > 100) brightness = 100;
       _uiPendingBrightness = brightness;
       _uiUpdateBrightnessPreview();
+      previewBrightnessOnQtpy(_uiPendingBrightness);  // live on the real strips too; not persisted until confirm
     }
     _uiRenderAll();
   }

@@ -25,8 +25,14 @@
 //                                  the 2nd floor, QT Py pad A1) color:
 //                                  purple — matches colors.h's PIXEL_PURPLE
 //   MONTHLY_PRESET_OCTOBER_BOTTOM_COLOR — October's "bottom strip"
-//                                  (1st floor, QT Py pad A0) color: orange
-//                                  — matches colors.h's PIXEL_ORANGE
+//                                  (1st floor, QT Py pad A0) color: a
+//                                  red-leaning, slightly darker orange —
+//                                  tuned after seeing colors.h's plain
+//                                  PIXEL_ORANGE read as too close to yellow
+//                                  on real hardware; led_presets.h's
+//                                  October preview uses this exact value
+//                                  too (not PIXEL_ORANGE) so the two can't
+//                                  drift apart again
 
 #pragma once
 #include <stdint.h>
@@ -50,4 +56,7 @@ static inline uint32_t monthlyPresetScaleColor(uint32_t color, uint8_t percent) 
 // 0x00RRGGBB packing, matching colors.h / Adafruit_NeoPixel::Color() — full
 // intensity; monthlyPresetScaleColor() applies the confirmed brightness.
 #define MONTHLY_PRESET_OCTOBER_TOP_COLOR    ((uint32_t)0x00640096)  // Color(100,   0, 150) — purple
-#define MONTHLY_PRESET_OCTOBER_BOTTOM_COLOR ((uint32_t)0x00C85000)  // Color(200,  80,   0) — orange
+// First cut was Color(200, 80, 0) (colors.h's PIXEL_ORANGE) — read as too
+// close to yellow on the real strips. Nudged toward red and a bit darker;
+// still tunable, this is a first adjustment pending feedback.
+#define MONTHLY_PRESET_OCTOBER_BOTTOM_COLOR ((uint32_t)0x00B43200)  // Color(180,  50,   0)

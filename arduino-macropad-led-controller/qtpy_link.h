@@ -44,7 +44,15 @@
 //                              the MacroPad's own side (flash + keypad)
 //                              regardless of QT Py reachability, so this
 //                              call isn't allowed to block or fail the
-//                              confirm action
+//                              confirm action. Also what to call on a
+//                              Brightness confirm (same scheme, new
+//                              brightness) — it's the only command that
+//                              persists on the QT Py side.
+//   previewBrightnessOnQtpy(brightnessPercent) — fire-and-forget, sent on
+//                              every Brightness-knob detent while turning
+//                              it (not just on confirm) so the real strips
+//                              update live; the QT Py applies this to RAM
+//                              only, never flash — see i2c_protocol.h
 
 #pragma once
 #include <Wire.h>
@@ -78,6 +86,13 @@ static inline void setActiveSchemeOnQtpy(int schemeIndex, int brightnessPercent)
   Wire.beginTransmission(QTPY_I2C_ADDRESS);
   Wire.write(QTPY_CMD_SET_SCHEME);
   Wire.write((uint8_t)schemeIndex);
+  Wire.write((uint8_t)brightnessPercent);
+  Wire.endTransmission();
+}
+
+static inline void previewBrightnessOnQtpy(int brightnessPercent) {
+  Wire.beginTransmission(QTPY_I2C_ADDRESS);
+  Wire.write(QTPY_CMD_PREVIEW_BRIGHTNESS);
   Wire.write((uint8_t)brightnessPercent);
   Wire.endTransmission();
 }

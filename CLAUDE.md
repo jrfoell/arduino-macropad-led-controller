@@ -36,12 +36,12 @@ have been **compiled and run for real** against an installed `arduino-cli`
 particular, this `arduino-cli` version requires an explicit version on
 every `sketch.yaml` profile `libraries:`/`platforms:` entry, and always
 use `--profile`, never bare `--fqbn`). Still unverified against real
-hardware: the rotary direction (CW vs CCW) may need swapping, and the
-QT Py's two outdoor-strip GPIO pins (`STRIP_A_PIN`/`STRIP_B_PIN` in
-`qtpy_led_driver/outdoor_leds.h`) — A0/GPIO29 for the 18m (1st floor)
-strip, A1/GPIO28 for the 12m (2nd floor) strip, confirmed as the intended
-assignment but not yet signal-tested against the real QuinLED Diff-Adv
-Sender-4 wiring.
+hardware: the rotary direction (CW vs CCW) may need swapping. The QT Py's
+two outdoor-strip GPIO pins (`STRIP_A_PIN`/`STRIP_B_PIN` in
+`qtpy_led_driver/outdoor_leds.h`, A0/GPIO29 for the 18m/1st-floor strip,
+A1/GPIO28 for the 12m/2nd-floor strip) **are now confirmed working**
+end to end through the full QuinLED Diff-Adv Sender-4 → Receiver
+Midpoint-1 chain to both real strips.
 
 ## Project goal
 
@@ -92,11 +92,14 @@ power-budget math behind the "Test Pattern" diagnostic mode, and everything
 this paragraph compresses: see
 `docs/superpowers/specs/2026-10-23-outdoor-led-driver-architecture-design.md`.
 
-**Not yet verified**: the QT Py's two outdoor-strip GPIO pins (A0 -> 18m/
-1st floor, A1 -> 12m/2nd floor — confirmed as the intended assignment, see
-"Project state") against real signal-level wiring to the QuinLED Diff-Adv
-Sender-4; the MacroPad's own 3.3V regulator headroom for also powering the
-QT Py over STEMMA QT.
+**Confirmed working end to end**: the QT Py's two outdoor-strip GPIO pins
+(A0 -> 18m/1st floor, A1 -> 12m/2nd floor) through the full QuinLED
+Diff-Adv Sender-4 → (daisy-chained) Receiver Midpoint-1 → strip chain —
+see "Project state".
+
+**Not yet verified**: the MacroPad's own 3.3V regulator headroom for also
+powering the QT Py over STEMMA QT (works fine in practice so far, just
+never measured).
 
 ## Arduino toolchain setup
 
@@ -179,14 +182,14 @@ substitute for reading them):
 - `keypad_leds.h` — drives the MacroPad's own 12 onboard NeoPixel LEDs under the keys (distinct from `led_output.h`'s outdoor LEDs); used as a live preview before a selection is confirmed, and for the Test Pattern diagnostic
 - `led_presets.h` — the 12 monthly scheme slots/names, active-scheme selection, and keypad-LED preview colors per scheme (`getSchemePreviewColors()`); October's case mirrors the real outdoor look (top 2 rows purple, bottom 2 rows orange) — every other month is still prototype-only content, not the final outdoor design
 - `settings_storage.h` — persists the active scheme + global brightness to flash via the arduino-pico core's built-in EEPROM emulation, restored on boot
-- `qtpy_link.h` — MacroPad-side (I2C host) Start/Stop Test Pattern commands and `setActiveSchemeOnQtpy()` (fire-and-forget, sent on every Preset confirm) to the QT Py LED driver, with ACK-based dead-link detection on Start
+- `qtpy_link.h` — MacroPad-side (I2C host) Start/Stop Test Pattern commands, `setActiveSchemeOnQtpy()` (fire-and-forget, persists on the QT Py — sent on every Preset *and* Brightness confirm), and `previewBrightnessOnQtpy()` (fire-and-forget, RAM-only on the QT Py — sent on every Brightness-knob detent while turning it, for a live update on the real strips) to the QT Py LED driver, with ACK-based dead-link detection on Start
 - `ui_controller.h` — the verb/noun/menu state machine tying keypad + rotary input + OLED + keypad LEDs + `led_presets.h` + `settings_storage.h` + `qtpy_link.h` together; implements the flow in `docs/superpowers/specs/2026-08-02-ui-navigation-design.md` (Brightness, Presets, and Test Pattern branches implemented — Custom/pattern verbs not yet; Brightness is rotary-only, Test Pattern is OLED-menu-only, neither has a keypad path)
 - `MacropadShared/src/led_test_pattern.h` — hardware-agnostic Test Pattern color/parity/phase sequencing, shared by both sketches (has a real `g++`-based test suite, no Arduino dependency)
-- `MacropadShared/src/i2c_protocol.h` — the Start/Stop/SetScheme/Ping command-byte constants both sketches agree on, plus the poll-interval/link-timeout constants behind the QT Py's host-link status LED
-- `MacropadShared/src/monthly_presets.h` — hardware-agnostic per-scheme outdoor data/logic shared by both sketches (so the keypad preview can't drift from the real strips): `MONTHLY_PRESET_LED_STRIDE` (every 3rd LED, applies to every implemented month), `monthlyPresetLedIsLit()`, `monthlyPresetScaleColor()`, and October's top/bottom colors. Only October implemented so far.
+- `MacropadShared/src/i2c_protocol.h` — the Start/Stop/SetScheme/PreviewBrightness/Ping command-byte constants both sketches agree on, plus the poll-interval/link-timeout constants behind the QT Py's host-link status LED
+- `MacropadShared/src/monthly_presets.h` — hardware-agnostic per-scheme outdoor data/logic shared by both sketches (so the keypad preview can't drift from the real strips): `MONTHLY_PRESET_LED_STRIDE` (every 3rd LED, applies to every implemented month), `monthlyPresetLedIsLit()`, `monthlyPresetScaleColor()`, and October's top/bottom colors — the orange was nudged redder/darker than colors.h's plain `PIXEL_ORANGE` after it read as too close to yellow on real hardware, still tunable. Only October implemented so far.
 - `qtpy_led_driver/outdoor_leds.h` — drives the two outdoor WS2812B strips from the QT Py's own GPIO for both the Test Pattern sequence and `showActiveSchemeOnOutdoorLeds()` (the active monthly preset — October implemented, every other month just turns both strips off)
 - `qtpy_led_driver/scheme_storage.h` — persists the QT Py's own active scheme + brightness to its own flash (same EEPROM-emulation mechanism as the MacroPad's `settings_storage.h`, but a fully independent flash region) — loaded and re-rendered immediately at the QT Py's own power-up, with no MacroPad involved
-- `qtpy_led_driver/i2c_commands.h` — QT Py-side (I2C peripheral on `Wire1`) Start/Stop/SetScheme command handling + ACK response; also tracks last-I2C-contact time for `isHostLinkAlive()`
+- `qtpy_led_driver/i2c_commands.h` — QT Py-side (I2C peripheral on `Wire1`) Start/Stop/SetScheme/PreviewBrightness command handling + ACK response; also tracks last-I2C-contact time for `isHostLinkAlive()`
 - `qtpy_led_driver/link_status_led.h` — drives the QT Py's own onboard NeoPixel: green flash on a real received command (Start/Stop, never the PING heartbeat — see `i2c_commands.h`'s `consumeCommandReceivedPending()`), else solid red whenever `isHostLinkAlive()` reports no contact from the MacroPad within `QTPY_LINK_TIMEOUT_MS` (STEMMA QT unplugged, MacroPad off, etc.), else off. `QTPY_CMD_PING` (sent by the MacroPad's presence probe, not a dedicated heartbeat protocol) keeps the link alive without counting as a command
 - `qtpy_led_driver/debug.h` — same modular debug macros as the MacroPad's `debug.h`, copied verbatim (each sketch needs its own copy; see `docs/superpowers/plans/2026-10-23-outdoor-led-driver-architecture.md`'s Task 4 for why it isn't shared via `MacropadShared` instead)
 

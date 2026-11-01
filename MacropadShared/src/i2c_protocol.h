@@ -37,6 +37,19 @@
 //                          then brightness percent (0-100) — see
 //                          qtpy_led_driver/scheme_storage.h for what the QT
 //                          Py does with it.
+//   QTPY_CMD_PREVIEW_BRIGHTNESS — live brightness preview while the
+//                          Brightness knob is turning, applied immediately
+//                          to whatever scheme is currently showing but
+//                          deliberately NOT persisted to the QT Py's flash
+//                          (QTPY_CMD_SET_SCHEME is what persists — sent
+//                          once, on confirm). Fire-and-forget, 1 payload
+//                          byte (brightness percent, 0-100). Like
+//                          QTPY_CMD_PING, this is excluded from the
+//                          command-received blink (link_status_led.h) —
+//                          it fires on every encoder detent while turning
+//                          the knob, which would otherwise read as a
+//                          solid-green glitch rather than a meaningful
+//                          event.
 //   QTPY_ACK_BYTE        — the fixed response byte to QTPY_CMD_START
 //   QTPY_STATUS_POLL_MS  — how often the MacroPad probes for QT Py presence
 //                          (ui_controller.h's corner icon) — defined here,
@@ -60,6 +73,7 @@
 #define QTPY_CMD_START       0x01
 #define QTPY_CMD_PING        0x02
 #define QTPY_CMD_SET_SCHEME  0x03
+#define QTPY_CMD_PREVIEW_BRIGHTNESS 0x04
 #define QTPY_ACK_BYTE        0xAC
 #define QTPY_STATUS_POLL_MS  1000
 #define QTPY_LINK_TIMEOUT_MS (3 * QTPY_STATUS_POLL_MS)
