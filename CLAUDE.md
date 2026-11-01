@@ -2,6 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Deployment status
+
+**The installation is live outside (as of 2026-10-31) — do not flash either
+board without explicit confirmation from the user first.** Development
+continues via commit+push once everything compiles clean; flashing is a
+separate, explicitly-requested step now, not automatic.
+
+**Last commit actually flashed to both physical boards: `3928ff6`.**
+Update this line every time a flash actually happens, so anyone (including
+a fresh session) can tell what's pending. Keep an eye on whether later
+commits touch the I2C protocol (`MacropadShared/src/i2c_protocol.h`) — a
+protocol change sitting unflashed for a while means the next real flash
+needs both boards updated together, not just whichever one's handy, or
+they'll misparse each other's messages (see "MacroPad = instructor, QT Py
+= executor" below for why the payload shapes have to match exactly).
+
 ## Project state
 
 This is now a **monorepo** of two Arduino sketches plus one shared local
