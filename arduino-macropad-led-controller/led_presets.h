@@ -72,6 +72,7 @@ static const char* const SCHEME_NAMES[NUM_SCHEMES] = {
 // below -- still softer/lighter than the fully-saturated primaries used
 // elsewhere (e.g. PIXEL_RED at 100% saturation), but now clearly tinted.
 #define PIXEL_PASTEL_PINK   ((uint32_t)0x00DC5A8C)  // Color(220,  90, 140)
+#define PIXEL_PASTEL_PEACH  ((uint32_t)0x00DC965A)  // Color(220, 150,  90)
 #define PIXEL_PASTEL_BLUE   ((uint32_t)0x005AA0DC)  // Color( 90, 160, 220)
 #define PIXEL_PASTEL_YELLOW ((uint32_t)0x00DCC35A)  // Color(220, 195,  90)
 #define PIXEL_PASTEL_GREEN  ((uint32_t)0x0064C878)  // Color(100, 200, 120)
@@ -83,7 +84,7 @@ static const char* const SCHEME_NAMES[NUM_SCHEMES] = {
 static constexpr uint32_t PALETTE_JANUARY[]   = { PIXEL_WHITE };
 static constexpr uint32_t PALETTE_FEBRUARY[]  = { PIXEL_RED, PIXEL_WHITE };
 static constexpr uint32_t PALETTE_MARCH[]     = { PIXEL_GREEN };
-static constexpr uint32_t PALETTE_APRIL[]     = { PIXEL_PASTEL_PINK, PIXEL_PASTEL_YELLOW, PIXEL_PASTEL_GREEN, PIXEL_PASTEL_BLUE, PIXEL_PASTEL_PURPLE };  // pastel rainbow, same order as June
+static constexpr uint32_t PALETTE_APRIL[]     = { PIXEL_PASTEL_PINK, PIXEL_PASTEL_PEACH, PIXEL_PASTEL_YELLOW, PIXEL_PASTEL_GREEN, PIXEL_PASTEL_BLUE, PIXEL_PASTEL_PURPLE };  // pastel rainbow, same order as June
 static constexpr uint32_t PALETTE_MAY[]       = { PIXEL_GREEN, PIXEL_RED, PIXEL_WHITE };
 static constexpr uint32_t PALETTE_JUNE[]      = { PIXEL_RED, PIXEL_ORANGE, PIXEL_YELLOW, PIXEL_GREEN, PIXEL_BLUE, PIXEL_PURPLE };  // rainbow
 static constexpr uint32_t PALETTE_JULY[]      = { PIXEL_RED, PIXEL_WHITE, PIXEL_BLUE };
