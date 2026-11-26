@@ -90,7 +90,9 @@ static constexpr uint32_t PALETTE_AUGUST[]    = { PIXEL_RED, PIXEL_ORANGE };
 static constexpr uint32_t PALETTE_SEPTEMBER[] = { PIXEL_DARK_RED, PIXEL_LIGHT_BLUE };
 static constexpr uint32_t PALETTE_OCTOBER_TOP[]    = { OCTOBER_TOP_COLOR };
 static constexpr uint32_t PALETTE_OCTOBER_BOTTOM[] = { OCTOBER_BOTTOM_COLOR };
-static constexpr uint32_t PALETTE_NOVEMBER[]  = { PIXEL_ORANGE, PIXEL_YELLOW };
+// November's orange deliberately reuses October's tuned bottom-strip orange
+// (deeper/redder than colors.h's generic PIXEL_ORANGE).
+static constexpr uint32_t PALETTE_NOVEMBER[]  = { OCTOBER_BOTTOM_COLOR, PIXEL_YELLOW };
 static constexpr uint32_t PALETTE_DECEMBER[]  = { PIXEL_RED, PIXEL_GREEN };
 
 struct _MonthPalettes {

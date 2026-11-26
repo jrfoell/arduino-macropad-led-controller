@@ -25,7 +25,9 @@
 #define PIXEL_WHITE   ((uint32_t)0x00646464)  // Color(100, 100, 100)
 #define PIXEL_ORANGE  ((uint32_t)0x00C85000)  // Color(200,  80,   0)
 #define PIXEL_PURPLE  ((uint32_t)0x00640096)  // Color(100,   0, 150)
-#define PIXEL_YELLOW  ((uint32_t)0x00C8C800)  // Color(200, 200,   0)
+// Color(200,200,0) read slightly green on the outdoor WS2812Bs (no blue to
+// remove — green is just perceptually stronger than red), so green is cut.
+#define PIXEL_YELLOW  ((uint32_t)0x00C8AA00)  // Color(200, 170,   0)
 
 static inline uint32_t scaleColorBrightness(uint32_t color, uint8_t percent) {
   uint8_t r = (color >> 16) & 0xFF;
