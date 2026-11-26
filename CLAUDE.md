@@ -9,7 +9,9 @@ board without explicit confirmation from the user first.** Development
 continues via commit+push once everything compiles clean; flashing is a
 separate, explicitly-requested step now, not automatic.
 
-**Last commit actually flashed to both physical boards: `ba56d06`.**
+**Last commit actually flashed: MacroPad `2cab2e6`, QT Py `ba56d06`**
+(the commits in between were MacroPad-only color changes, so the two are
+protocol-compatible).
 Update this line every time a flash actually happens, so anyone (including
 a fresh session) can tell what's pending. Keep an eye on whether later
 commits touch the I2C protocol (`MacropadShared/src/i2c_protocol.h`) — a
