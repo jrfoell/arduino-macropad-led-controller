@@ -73,6 +73,14 @@ static const char* const SCHEME_NAMES[NUM_SCHEMES] = {
 // PIXEL_ORANGE (June, August).
 #define PIXEL_DEEP_ORANGE   ((uint32_t)0x00A01400)  // Color(160,  20,   0)
 
+// Minnesota state flag (2024). Official (MN Secretary of State construction
+// sheet): Night Sky Blue #002D5D, Water Blue #52C9E8. Night Sky Blue as-is
+// is too dim next to PIXEL_WHITE on the strips, so it's brightened to a
+// deep, nearly pure blue; Water Blue keeps the official ratio, scaled so
+// its brightest channel matches the other colors (~200).
+#define PIXEL_NIGHT_SKY_BLUE ((uint32_t)0x00002896)  // Color(  0,  40, 150)
+#define PIXEL_WATER_BLUE     ((uint32_t)0x0047ADC8)  // Color( 71, 173, 200)
+
 #define PIXEL_DARK_RED      ((uint32_t)0x00640000)  // Color(100,   0,   0)
 #define PIXEL_LIGHT_BLUE    ((uint32_t)0x00A0C8FF)  // Color(160, 200, 255)
 // April's original pastel values (~25-32% saturation, e.g. 255,182,193)
@@ -98,7 +106,7 @@ static constexpr uint32_t PALETTE_APRIL[]     = { PIXEL_PASTEL_PINK, PIXEL_PASTE
 static constexpr uint32_t PALETTE_MAY[]       = { PIXEL_GREEN, PIXEL_RED, PIXEL_WHITE };
 static constexpr uint32_t PALETTE_JUNE[]      = { PIXEL_RED, PIXEL_ORANGE, PIXEL_YELLOW, PIXEL_GREEN, PIXEL_BLUE, PIXEL_PURPLE };  // rainbow
 static constexpr uint32_t PALETTE_JULY[]      = { PIXEL_RED, PIXEL_WHITE, PIXEL_BLUE };
-static constexpr uint32_t PALETTE_AUGUST[]    = { PIXEL_RED, PIXEL_ORANGE };
+static constexpr uint32_t PALETTE_AUGUST[]    = { PIXEL_WHITE, PIXEL_NIGHT_SKY_BLUE, PIXEL_WATER_BLUE };  // Minnesota state flag
 static constexpr uint32_t PALETTE_SEPTEMBER[] = { PIXEL_DARK_RED, PIXEL_LIGHT_BLUE };
 static constexpr uint32_t PALETTE_OCTOBER_TOP[]    = { PIXEL_PURPLE };
 static constexpr uint32_t PALETTE_OCTOBER_BOTTOM[] = { PIXEL_DEEP_ORANGE };
