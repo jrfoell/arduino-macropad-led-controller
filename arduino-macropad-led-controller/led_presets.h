@@ -75,6 +75,7 @@ static const char* const SCHEME_NAMES[NUM_SCHEMES] = {
 #define PIXEL_PASTEL_BLUE   ((uint32_t)0x005AA0DC)  // Color( 90, 160, 220)
 #define PIXEL_PASTEL_YELLOW ((uint32_t)0x00DCC35A)  // Color(220, 195,  90)
 #define PIXEL_PASTEL_GREEN  ((uint32_t)0x0064C878)  // Color(100, 200, 120)
+#define PIXEL_PASTEL_PURPLE ((uint32_t)0x00AA64DC)  // Color(170, 100, 220)
 
 // ─── Per-month palettes ─────────────────────────────────────────────────────
 // 1 to SCHEME_PALETTE_MAX_COLORS colors each (enforced at compile time by
@@ -82,7 +83,7 @@ static const char* const SCHEME_NAMES[NUM_SCHEMES] = {
 static constexpr uint32_t PALETTE_JANUARY[]   = { PIXEL_WHITE };
 static constexpr uint32_t PALETTE_FEBRUARY[]  = { PIXEL_RED, PIXEL_WHITE };
 static constexpr uint32_t PALETTE_MARCH[]     = { PIXEL_GREEN };
-static constexpr uint32_t PALETTE_APRIL[]     = { PIXEL_PASTEL_PINK, PIXEL_PASTEL_BLUE, PIXEL_PASTEL_YELLOW, PIXEL_PASTEL_GREEN };
+static constexpr uint32_t PALETTE_APRIL[]     = { PIXEL_PASTEL_PINK, PIXEL_PASTEL_YELLOW, PIXEL_PASTEL_GREEN, PIXEL_PASTEL_BLUE, PIXEL_PASTEL_PURPLE };  // pastel rainbow, same order as June
 static constexpr uint32_t PALETTE_MAY[]       = { PIXEL_GREEN, PIXEL_RED, PIXEL_WHITE };
 static constexpr uint32_t PALETTE_JUNE[]      = { PIXEL_RED, PIXEL_ORANGE, PIXEL_YELLOW, PIXEL_GREEN, PIXEL_BLUE, PIXEL_PURPLE };  // rainbow
 static constexpr uint32_t PALETTE_JULY[]      = { PIXEL_RED, PIXEL_WHITE, PIXEL_BLUE };
