@@ -9,9 +9,7 @@ board without explicit confirmation from the user first.** Development
 continues via commit+push once everything compiles clean; flashing is a
 separate, explicitly-requested step now, not automatic.
 
-**Last commit actually flashed: QT Py `ba56d06`, MacroPad `3928ff6`** —
-**boards currently MISMATCHED across the I2C protocol change below; flash
-the MacroPad next.**
+**Last commit actually flashed to both physical boards: `ba56d06`.**
 Update this line every time a flash actually happens, so anyone (including
 a fresh session) can tell what's pending. Keep an eye on whether later
 commits touch the I2C protocol (`MacropadShared/src/i2c_protocol.h`) — a
@@ -20,13 +18,10 @@ needs both boards updated together, not just whichever one's handy, or
 they'll misparse each other's messages (see "MacroPad = instructor, QT Py
 = executor" below for why the payload shapes have to match exactly).
 
-**Pending, unflashed: an I2C protocol change.** Commits after `3928ff6`
-replace the 8-byte single-color SetScheme/Query payload with a 52-byte
-packed `SchemeRecipe` (per-strip palettes). Flash **both** boards
-together. A new QT Py ignores the old MacroPad's short payload, and the old
-QT Py's 8-byte query reply fails the new MacroPad's length check. Neither
-crashes, but presets won't change until both are updated. The new QT Py
-migrates its old saved scheme from flash on first boot.
+**Flashed together at `ba56d06`: the I2C protocol change.** It replaced
+the 8-byte single-color SetScheme/Query payload with a 52-byte packed
+`SchemeRecipe` (per-strip palettes). Mixing a board from before that
+change with one from after it means presets won't change on the house.
 
 ## Project state
 
