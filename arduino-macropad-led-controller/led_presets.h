@@ -59,15 +59,19 @@ static const char* const SCHEME_NAMES[NUM_SCHEMES] = {
   "September", "October",  "November", "December"
 };
 
-// ─── Month-specific tints ───────────────────────────────────────────────────
-// Colors specific to one month (not generic/reusable enough for colors.h).
+// ─── Preset-specific tints ──────────────────────────────────────────────────
+// Colors tuned for the outdoor strips that aren't generic enough for
+// colors.h. Named by color, not month, so they can be reused across presets.
+//
+// Purple (October top strip) is colors.h's PIXEL_PURPLE, Color(100,0,150),
+// used directly — tuning it there also changes June's rainbow purple.
 
-// October's real outdoor colors.
-#define OCTOBER_TOP_COLOR    ((uint32_t)0x00640096)  // Color(100,   0, 150) — purple
 // Color(200,80,0) -> Color(180,50,0) [too close to yellow -> good step
 // toward red] -> Color(160,20,0) [same -20R/-30G/+0B delta applied again,
-// for a deeper, more saturated red-orange].
-#define OCTOBER_BOTTOM_COLOR ((uint32_t)0x00A01400)  // Color(160,  20,   0)
+// for a deeper, more saturated red-orange]. Originally October's bottom
+// strip; also November's orange. Distinct from colors.h's lighter
+// PIXEL_ORANGE (June, August).
+#define PIXEL_DEEP_ORANGE   ((uint32_t)0x00A01400)  // Color(160,  20,   0)
 
 #define PIXEL_DARK_RED      ((uint32_t)0x00640000)  // Color(100,   0,   0)
 #define PIXEL_LIGHT_BLUE    ((uint32_t)0x00A0C8FF)  // Color(160, 200, 255)
@@ -96,11 +100,9 @@ static constexpr uint32_t PALETTE_JUNE[]      = { PIXEL_RED, PIXEL_ORANGE, PIXEL
 static constexpr uint32_t PALETTE_JULY[]      = { PIXEL_RED, PIXEL_WHITE, PIXEL_BLUE };
 static constexpr uint32_t PALETTE_AUGUST[]    = { PIXEL_RED, PIXEL_ORANGE };
 static constexpr uint32_t PALETTE_SEPTEMBER[] = { PIXEL_DARK_RED, PIXEL_LIGHT_BLUE };
-static constexpr uint32_t PALETTE_OCTOBER_TOP[]    = { OCTOBER_TOP_COLOR };
-static constexpr uint32_t PALETTE_OCTOBER_BOTTOM[] = { OCTOBER_BOTTOM_COLOR };
-// November's orange deliberately reuses October's tuned bottom-strip orange
-// (deeper/redder than colors.h's generic PIXEL_ORANGE).
-static constexpr uint32_t PALETTE_NOVEMBER[]  = { OCTOBER_BOTTOM_COLOR, PIXEL_YELLOW };
+static constexpr uint32_t PALETTE_OCTOBER_TOP[]    = { PIXEL_PURPLE };
+static constexpr uint32_t PALETTE_OCTOBER_BOTTOM[] = { PIXEL_DEEP_ORANGE };
+static constexpr uint32_t PALETTE_NOVEMBER[]  = { PIXEL_DEEP_ORANGE, PIXEL_YELLOW };
 static constexpr uint32_t PALETTE_DECEMBER[]  = { PIXEL_RED, PIXEL_GREEN };
 
 struct _MonthPalettes {
