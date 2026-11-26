@@ -1,9 +1,8 @@
 // i2c_protocol.h
 // The I2C command-byte constants shared by the MacroPad (I2C host) and the
 // QT Py LED driver (I2C peripheral on Wire1 — see the QT Py sketch). This
-// covers only what the Test Pattern feature needs: start it, stop it — not
-// a general preset-rendering protocol, which is future work pending the
-// still-undecided monthly scheme content. See
+// covers the Test Pattern (start/stop), the link heartbeat, and setting/
+// querying the active monthly scheme recipe (scheme_recipe.h). See
 // docs/superpowers/specs/2026-10-23-outdoor-led-driver-architecture-design.md
 // ("MacroPad <-> QT Py command link").
 //
@@ -36,19 +35,26 @@
 //                          applies to its own flash/keypad regardless of
 //                          the QT Py's reachability (see "The MacroPad
 //                          works fully with no QT Py attached" in
-//                          ui_controller.h). Payload is exactly 8 bytes
-//                          after the command byte: scheme index (0-11,
-//                          same numbering as the MacroPad's led_presets.h),
-//                          brightness percent (0-100), top-strip R, G, B,
-//                          bottom-strip R, G, B — see
-//                          qtpy_led_driver/scheme_storage.h for what the QT
-//                          Py does with it.
+//                          ui_controller.h). Payload is exactly
+//                          SCHEME_RECIPE_PACKED_SIZE (52) bytes after the
+//                          command byte: a packed SchemeRecipe — scheme
+//                          index (0-11, same numbering as the MacroPad's
+//                          led_presets.h), brightness percent (0-100), and
+//                          a palette of up to SCHEME_PALETTE_MAX_COLORS
+//                          colors per strip. Layout defined once in
+//                          scheme_recipe.h. A shorter payload (e.g. the
+//                          old 8-byte single-color format from an
+//                          unreflashed MacroPad) is ignored, so both
+//                          boards must be flashed together across this
+//                          change. See qtpy_led_driver/scheme_storage.h
+//                          for what the QT Py does with it.
 //   QTPY_CMD_QUERY_SCHEME — ask the QT Py what it's currently showing —
 //                          two-way communication, the other half of
 //                          QTPY_CMD_SET_SCHEME. Write the command byte with
-//                          no payload, then requestFrom() 8 bytes back in
-//                          the exact same layout SET_SCHEME sends (scheme,
-//                          brightness, top RGB, bottom RGB) — the QT Py's
+//                          no payload, then requestFrom()
+//                          SCHEME_RECIPE_PACKED_SIZE bytes back in the
+//                          exact same packed SchemeRecipe layout SET_SCHEME
+//                          sends — the QT Py's
 //                          own last-known/persisted state, which is the
 //                          actual source of truth for what's physically
 //                          showing outdoors. The MacroPad uses this when

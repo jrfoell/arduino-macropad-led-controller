@@ -38,7 +38,7 @@
 //                              QT Py but whose ACK didn't reach us must not
 //                              leave it running unseen.
 //   stopTestPatternOnQtpy()  — fire-and-forget, no response expected
-//   setActiveSchemeOnQtpy(scheme, brightnessPercent, topColor, bottomColor)
+//   setActiveSchemeOnQtpy(recipe)
 //                              — fire-and-forget, no response expected,
 //                              like stopTestPatternOnQtpy() — a preset
 //                              selection already fully applies on the
@@ -48,18 +48,17 @@
 //                              confirm action. Also what to call on a
 //                              Brightness confirm (same scheme + colors,
 //                              new brightness) — it's the only command
-//                              that persists on the QT Py side. topColor/
-//                              bottomColor come from led_presets.h's
-//                              getSchemeOutdoorColors() — the MacroPad is
-//                              the sole authority on scheme content, the QT
-//                              Py has none of its own.
+//                              that persists on the QT Py side. The
+//                              recipe comes from led_presets.h's
+//                              buildSchemeRecipe() — the MacroPad is the
+//                              sole authority on scheme content, the QT Py
+//                              has none of its own.
 //   previewBrightnessOnQtpy(brightnessPercent) — fire-and-forget, sent on
 //                              every Brightness-knob detent while turning
 //                              it (not just on confirm) so the real strips
 //                              update live; the QT Py applies this to RAM
 //                              only, never flash — see i2c_protocol.h
-//   queryActiveSchemeFromQtpy(outScheme, outBrightness, outTopColor,
-//                              outBottomColor) — two-way communication, the
+//   queryActiveSchemeFromQtpy(outRecipe) — two-way communication, the
 //                              other half of setActiveSchemeOnQtpy(): reads
 //                              back what the QT Py is actually
 //                              showing/persisted right now (its own
@@ -72,6 +71,7 @@
 #include <Wire.h>
 #include "debug.h"
 #include "i2c_protocol.h"  // from MacropadShared
+#include "scheme_recipe.h" // from MacropadShared
 
 enum QtpyLinkResult { QTPY_LINK_OK, QTPY_LINK_NO_RESPONSE, QTPY_LINK_BAD_ACK };
 
@@ -96,38 +96,32 @@ static inline void stopTestPatternOnQtpy() {
   Wire.endTransmission();
 }
 
-static inline void setActiveSchemeOnQtpy(int schemeIndex, int brightnessPercent, uint32_t topColor, uint32_t bottomColor) {
+static inline void setActiveSchemeOnQtpy(const SchemeRecipe* recipe) {
+  uint8_t packed[SCHEME_RECIPE_PACKED_SIZE];
+  packSchemeRecipe(recipe, packed);
   Wire.beginTransmission(QTPY_I2C_ADDRESS);
   Wire.write(QTPY_CMD_SET_SCHEME);
-  Wire.write((uint8_t)schemeIndex);
-  Wire.write((uint8_t)brightnessPercent);
-  Wire.write((uint8_t)(topColor >> 16));
-  Wire.write((uint8_t)(topColor >> 8));
-  Wire.write((uint8_t)topColor);
-  Wire.write((uint8_t)(bottomColor >> 16));
-  Wire.write((uint8_t)(bottomColor >> 8));
-  Wire.write((uint8_t)bottomColor);
+  Wire.write(packed, SCHEME_RECIPE_PACKED_SIZE);
   Wire.endTransmission();
 }
 
 // See i2c_protocol.h's QTPY_CMD_QUERY_SCHEME for the wire format.
-static inline bool queryActiveSchemeFromQtpy(int* outScheme, int* outBrightness, uint32_t* outTopColor, uint32_t* outBottomColor) {
+static inline bool queryActiveSchemeFromQtpy(SchemeRecipe* outRecipe) {
   Wire.beginTransmission(QTPY_I2C_ADDRESS);
   Wire.write(QTPY_CMD_QUERY_SCHEME);
   if (Wire.endTransmission() != 0) {
     return false;
   }
 
-  Wire.requestFrom(QTPY_I2C_ADDRESS, 8);
-  if (Wire.available() < 8) {
+  Wire.requestFrom(QTPY_I2C_ADDRESS, SCHEME_RECIPE_PACKED_SIZE);
+  if (Wire.available() < SCHEME_RECIPE_PACKED_SIZE) {
     return false;
   }
-  *outScheme     = Wire.read();
-  *outBrightness = Wire.read();
-  uint8_t topR = Wire.read(), topG = Wire.read(), topB = Wire.read();
-  uint8_t bottomR = Wire.read(), bottomG = Wire.read(), bottomB = Wire.read();
-  *outTopColor    = ((uint32_t)topR << 16)    | ((uint32_t)topG << 8)    | topB;
-  *outBottomColor = ((uint32_t)bottomR << 16) | ((uint32_t)bottomG << 8) | bottomB;
+  uint8_t packed[SCHEME_RECIPE_PACKED_SIZE];
+  for (uint8_t i = 0; i < SCHEME_RECIPE_PACKED_SIZE; i++) {
+    packed[i] = Wire.read();
+  }
+  unpackSchemeRecipe(packed, outRecipe);
   return true;
 }
 

@@ -18,6 +18,14 @@ needs both boards updated together, not just whichever one's handy, or
 they'll misparse each other's messages (see "MacroPad = instructor, QT Py
 = executor" below for why the payload shapes have to match exactly).
 
+**Pending, unflashed: an I2C protocol change.** Commits after `3928ff6`
+replace the 8-byte single-color SetScheme/Query payload with a 52-byte
+packed `SchemeRecipe` (per-strip palettes). Flash **both** boards
+together. A new QT Py ignores the old MacroPad's short payload, and the old
+QT Py's 8-byte query reply fails the new MacroPad's length check. Neither
+crashes, but presets won't change until both are updated. The new QT Py
+migrates its old saved scheme from flash on first boot.
+
 ## Project state
 
 This is now a **monorepo** of two Arduino sketches plus one shared local
@@ -30,16 +38,17 @@ are implemented as a first coding-pass prototype — see `ui_controller.h` and
 `docs/superpowers/specs/2026-08-02-ui-navigation-design.md`. The active
 preset and global brightness are persisted across power cycles via flash
 (EEPROM emulation, see `settings_storage.h`). Still stubbed: the
-"Custom"/pattern-verb branch, and 11 of the 12 monthly presets' real
-outdoor content (each month's visual design is an open question — see
-"Open design questions" — except **October**).
+"Custom"/pattern-verb branch. All 12 monthly presets now send real
+outdoor palettes (every 3rd LED lit, lit LEDs cycling the palette), but
+only **October**'s design is final — the other 11 are working drafts
+still being tuned (see "Open design questions").
 
 **MacroPad = instructor, QT Py = executor** (this is the actual protocol
 shape now, not just a design principle): the MacroPad is the sole
 authority on what any scheme looks like (colors live in `led_presets.h`);
 the QT Py has zero compiled-in knowledge of any scheme and just stores +
-renders whatever recipe (scheme index, brightness, top/bottom strip
-colors) it's told over I2C, persisting it to its own flash independently
+renders whatever recipe (scheme index, brightness, and a color palette
+per strip — `MacropadShared/src/scheme_recipe.h`) it's told over I2C, persisting it to its own flash independently
 so it's also what powers on by default with no MacroPad involved. This
 means tuning a color is purely a MacroPad-side edit+reflash — the QT Py
 never needs rebuilding for *content* changes, only for actual logic
@@ -48,9 +57,9 @@ it's currently showing (used when entering the Presets menu, so browsing
 starts from the installation's real state rather than a possibly-stale
 local copy). See `qtpy_led_driver/outdoor_leds.h`, `scheme_storage.h`,
 `i2c_commands.h`, the MacroPad's `qtpy_link.h`, and
-`MacropadShared/src/i2c_protocol.h` + `monthly_presets.h` (the latter now
-holds only the shared stride/brightness-scaling *math*, no colors — those
-live solely in `led_presets.h`).
+`MacropadShared/src/i2c_protocol.h` + `scheme_recipe.h` + `monthly_presets.h`
+(the latter holds only the shared stride/palette-cycling/brightness-scaling
+*math*, no colors — those live solely in `led_presets.h`).
 
 A fourth menu item, **"Test Pattern"**, is also fully implemented end to
 end: it commands the QT Py companion controller over I2C to run a
@@ -210,15 +219,16 @@ substitute for reading them):
 - `rotary_input.h` — rotary encoder (decoded via the third-party `RotaryEncoder` library, `LatchMode::FOUR3`) + switch handling, both implemented; not yet verified against real hardware
 - `oled_display.h` — renders the 3-zone UI (menu/message/input) described in the UI/navigation design doc; top menu is Brightness/Presets/Custom/Test Pattern (4 items)
 - `keypad_leds.h` — drives the MacroPad's own 12 onboard NeoPixel LEDs under the keys (distinct from `led_output.h`'s outdoor LEDs); used as a live preview before a selection is confirmed, and for the Test Pattern diagnostic
-- `led_presets.h` — the 12 monthly scheme slots/names, active-scheme selection, keypad-LED preview colors per scheme (`getSchemePreviewColors()`), and **the sole source of truth for real outdoor colors** (`getSchemeOutdoorColors()`) — the QT Py has no compiled-in scheme knowledge of its own, this is what gets sent over I2C. October's preview mirrors its real outdoor look exactly (same `OCTOBER_TOP_COLOR`/`OCTOBER_BOTTOM_COLOR` constants feed both) — every other month still returns "off" from `getSchemeOutdoorColors()` and is prototype-only in the preview
+- `led_presets.h` — the 12 monthly scheme slots/names, active-scheme selection, and **the sole source of truth for real outdoor colors**: one `MONTH_PALETTES` table (a top-strip and bottom-strip palette per month, 1..`SCHEME_PALETTE_MAX_COLORS` colors each, compile-time checked) feeds both `buildSchemeRecipe()` (what gets sent over I2C — the QT Py has no compiled-in scheme knowledge of its own) and `getSchemePreviewColors()` (keypad preview: top 2 key rows cycle the top palette, bottom 2 rows the bottom palette), so the preview can't drift from the real strips
 - `settings_storage.h` — persists the active scheme + global brightness to flash via the arduino-pico core's built-in EEPROM emulation, restored on boot
-- `qtpy_link.h` — MacroPad-side (I2C host) Start/Stop Test Pattern commands, `setActiveSchemeOnQtpy()` (fire-and-forget, sends the full recipe — scheme index, brightness, top/bottom colors from `led_presets.h` — persists on the QT Py; sent on every Preset *and* Brightness confirm), `previewBrightnessOnQtpy()` (fire-and-forget, RAM-only on the QT Py — sent on every Brightness-knob detent while turning it), and `queryActiveSchemeFromQtpy()` (two-way — reads back what the QT Py is actually persisting/showing, used on entering the Presets menu) to the QT Py LED driver, with ACK-based dead-link detection on Start
+- `qtpy_link.h` — MacroPad-side (I2C host) Start/Stop Test Pattern commands, `setActiveSchemeOnQtpy()` (fire-and-forget, sends the full packed `SchemeRecipe` from `led_presets.h`'s `buildSchemeRecipe()` — persists on the QT Py; sent on every Preset *and* Brightness confirm), `previewBrightnessOnQtpy()` (fire-and-forget, RAM-only on the QT Py — sent on every Brightness-knob detent while turning it), and `queryActiveSchemeFromQtpy()` (two-way — reads back what the QT Py is actually persisting/showing, used on entering the Presets menu) to the QT Py LED driver, with ACK-based dead-link detection on Start
 - `ui_controller.h` — the verb/noun/menu state machine tying keypad + rotary input + OLED + keypad LEDs + `led_presets.h` + `settings_storage.h` + `qtpy_link.h` together; implements the flow in `docs/superpowers/specs/2026-08-02-ui-navigation-design.md` (Brightness, Presets, and Test Pattern branches implemented — Custom/pattern verbs not yet; Brightness is rotary-only, Test Pattern is OLED-menu-only, neither has a keypad path)
 - `MacropadShared/src/led_test_pattern.h` — hardware-agnostic Test Pattern color/parity/phase sequencing, shared by both sketches (has a real `g++`-based test suite, no Arduino dependency)
-- `MacropadShared/src/i2c_protocol.h` — the Start/Stop/SetScheme/PreviewBrightness/QuerySchemeBrightness/Ping command-byte constants both sketches agree on, plus the poll-interval/link-timeout constants behind the QT Py's host-link status LED. `SET_SCHEME`'s 8-byte payload (scheme, brightness, top RGB, bottom RGB) and `QUERY_SCHEME`'s identically-shaped 8-byte response are the actual "MacroPad = instructor, QT Py = executor" protocol — see "Project state"
-- `MacropadShared/src/monthly_presets.h` — only the hardware-agnostic rendering *math* shared by both sketches: `MONTHLY_PRESET_LED_STRIDE` (every 3rd LED) and `monthlyPresetLedIsLit(i, offset)`/`monthlyPresetScaleColor()`. Deliberately holds no colors or per-month content anymore — those live solely in the MacroPad's `led_presets.h` and get sent over I2C, not compiled into the QT Py. The `offset` param shifts which LEDs are lit by `MONTHLY_PRESET_LED_STRIDE`-aware wear-leveling — see `scheme_storage.h`'s `loadAndAdvanceLedOffset()`
-- `qtpy_led_driver/outdoor_leds.h` — drives the two outdoor WS2812B strips from the QT Py's own GPIO for both the Test Pattern sequence and `showActiveSchemeOnOutdoorLeds(topColor, bottomColor, brightnessPercent, ledOffset)` — takes colors directly, no scheme-index dispatch or scheme knowledge of any kind
-- `qtpy_led_driver/scheme_storage.h` — persists the QT Py's own active scheme description (index, brightness, top/bottom colors — not just index + brightness) to its own flash (same EEPROM-emulation mechanism as the MacroPad's `settings_storage.h`, but a fully independent flash region) — loaded and re-rendered immediately at the QT Py's own power-up, with no MacroPad involved. Also `loadAndAdvanceLedOffset()`: a separate persisted byte, advanced once per boot (power-cycle or reflash) regardless of scheme, that shifts which physical LEDs the stride pattern lights — spreads wear/usage hours across the whole strip instead of always the same LEDs, and helps surface a dead one instead of it silently always being a dark position
+- `MacropadShared/src/i2c_protocol.h` — the Start/Stop/SetScheme/PreviewBrightness/QuerySchemeBrightness/Ping command-byte constants both sketches agree on, plus the poll-interval/link-timeout constants behind the QT Py's host-link status LED. `SET_SCHEME`'s payload and `QUERY_SCHEME`'s response are both a packed `SchemeRecipe` (see `scheme_recipe.h`) — the actual "MacroPad = instructor, QT Py = executor" protocol — see "Project state"
+- `MacropadShared/src/scheme_recipe.h` — the `SchemePalette`/`SchemeRecipe` structs (scheme index, brightness, up to `SCHEME_PALETTE_MAX_COLORS` colors per strip) and the one fixed 52-byte packed layout used for the I2C SetScheme payload, the Query response, *and* the QT Py's flash copy, so those three can't drift. Tested by `MacropadShared/test/test_scheme_recipe.cpp`
+- `MacropadShared/src/monthly_presets.h` — only the hardware-agnostic rendering *math* shared by both sketches: `MONTHLY_PRESET_LED_STRIDE` (every 3rd LED), `monthlyPresetLedIsLit(i, offset)`, `monthlyPresetPaletteColorAt(i, offset, palette)` (the lit LEDs cycle through the palette in order), and `monthlyPresetScaleColor()`. Deliberately holds no colors or per-month content anymore — those live solely in the MacroPad's `led_presets.h` and get sent over I2C, not compiled into the QT Py. The `offset` param shifts which LEDs are lit by `MONTHLY_PRESET_LED_STRIDE`-aware wear-leveling — see `scheme_storage.h`'s `loadAndAdvanceLedOffset()`
+- `qtpy_led_driver/outdoor_leds.h` — drives the two outdoor WS2812B strips from the QT Py's own GPIO for both the Test Pattern sequence and `showActiveSchemeOnOutdoorLeds(recipe, ledOffset)` — takes palettes directly, no scheme-index dispatch or scheme knowledge of any kind
+- `qtpy_led_driver/scheme_storage.h` — persists the QT Py's own active `SchemeRecipe` (index, brightness, top/bottom palettes — magic `0xB3`; still reads the older single-color `0xB2` layout as 1-color palettes) to its own flash (same EEPROM-emulation mechanism as the MacroPad's `settings_storage.h`, but a fully independent flash region) — loaded and re-rendered immediately at the QT Py's own power-up, with no MacroPad involved. Also `loadAndAdvanceLedOffset()`: a separate persisted byte, advanced once per boot (power-cycle or reflash) regardless of scheme, that shifts which physical LEDs the stride pattern lights — spreads wear/usage hours across the whole strip instead of always the same LEDs, and helps surface a dead one instead of it silently always being a dark position
 - `qtpy_led_driver/i2c_commands.h` — QT Py-side (I2C peripheral on `Wire1`) Start/Stop/SetScheme/PreviewBrightness/QuerySchemeBrightness command handling + ACK/query-response; also tracks last-I2C-contact time for `isHostLinkAlive()` and the current render state for query responses (`setQueryableSchemeState()`)
 - `qtpy_led_driver/link_status_led.h` — drives the QT Py's own onboard NeoPixel: green flash on a real received command (Start/Stop, never the PING heartbeat — see `i2c_commands.h`'s `consumeCommandReceivedPending()`), else solid red whenever `isHostLinkAlive()` reports no contact from the MacroPad within `QTPY_LINK_TIMEOUT_MS` (STEMMA QT unplugged, MacroPad off, etc.), else off. `QTPY_CMD_PING` (sent by the MacroPad's presence probe, not a dedicated heartbeat protocol) keeps the link alive without counting as a command
 - `qtpy_led_driver/debug.h` — same modular debug macros as the MacroPad's `debug.h`, copied verbatim (each sketch needs its own copy; see `docs/superpowers/plans/2026-10-23-outdoor-led-driver-architecture.md`'s Task 4 for why it isn't shared via `MacropadShared` instead)
@@ -269,7 +279,9 @@ These haven't been decided yet — check with the user before assuming an answer
 - What the 12 monthly themes/schemes actually are, and what "significant"
   event each month celebrates — **October resolved**: top strip (A1/12m/
   2nd floor) purple, bottom strip (A0/18m/1st floor) orange, both at
-  `MONTHLY_PRESET_LED_STRIDE` (every 3rd LED). The other 11 remain open.
+  `MONTHLY_PRESET_LED_STRIDE` (every 3rd LED). The other 11 have working
+  draft palettes in `led_presets.h`'s `MONTH_PALETTES` (same palette on
+  both strips) that display on the real strips, but are still being tuned.
 - How presets are selected/stored (key press → immediate switch? rotary knob
   to browse + key/button to confirm? persisted across power cycles?)
 - Whether the OLED shows anything beyond a status/preset indicator
@@ -287,7 +299,7 @@ These haven't been decided yet — check with the user before assuming an answer
   (`Name (version)` syntax, checked via `arduino-cli lib list`/`core
   list`) — a bare, unversioned name doesn't resolve even when that exact
   library is already installed. `MacropadShared` has a real test suite
-  (`g++ -std=c++11 -I MacropadShared/src MacropadShared/test/test_led_test_pattern.cpp -o /tmp/t && /tmp/t`)
+  (`g++ -std=c++11 -I MacropadShared/src MacropadShared/test/<test>.cpp -o /tmp/t && /tmp/t`, for each of `test_led_test_pattern.cpp` and `test_scheme_recipe.cpp`)
   since it has no Arduino dependency; still confirm `arduino-cli`/Arduino
   IDE is set up before building or uploading on a *different* machine, and
   confirm the port before assuming one.

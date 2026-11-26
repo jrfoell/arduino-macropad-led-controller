@@ -20,13 +20,17 @@
 //   showTestPatternOnOutdoorLeds(elapsedMs)   — render the Test Pattern
 //                                                sequence (led_test_pattern.h)
 //                                                at the given elapsed time
-//   showActiveSchemeOnOutdoorLeds(topColor, bottomColor, brightnessPercent, ledOffset)
-//                                                — render the given top-
-//                                                strip/bottom-strip colors
-//                                                (0x00RRGGBB, as sent by the
-//                                                MacroPad — see
-//                                                qtpy_led_driver.ino) at the
-//                                                given 0-100 brightness,
+//   showActiveSchemeOnOutdoorLeds(recipe, ledOffset)
+//                                                — render the given
+//                                                SchemeRecipe's top-strip/
+//                                                bottom-strip palettes (as
+//                                                sent by the MacroPad — see
+//                                                qtpy_led_driver.ino) at its
+//                                                0-100 brightness, lit LEDs
+//                                                cycling through each
+//                                                strip's palette in order
+//                                                (monthly_presets.h's
+//                                                monthlyPresetPaletteColorAt()),
 //                                                with the lit-LED pattern
 //                                                shifted by `ledOffset`
 //                                                (0..MONTHLY_PRESET_LED_STRIDE-1
@@ -101,17 +105,22 @@ static inline void showTestPatternOnOutdoorLeds(unsigned long elapsedMs) {
   _renderOutdoorStrip(stripB, STRIP_B_LED_COUNT, color, phase.evenParityLit);
 }
 
-static inline void _renderMonthlyStrip(Adafruit_NeoPixel& strip, uint16_t count, uint32_t color, uint8_t ledOffset) {
+static inline void _renderMonthlyStrip(Adafruit_NeoPixel& strip, uint16_t count, const SchemePalette* palette, uint8_t brightnessPercent, uint8_t ledOffset) {
+  // Scale each palette color once, not once per LED.
+  SchemePalette scaled = *palette;
+  for (uint8_t c = 0; c < scaled.count; c++) {
+    scaled.colors[c] = monthlyPresetScaleColor(palette->colors[c], brightnessPercent);
+  }
   for (uint16_t i = 0; i < count; i++) {
-    strip.setPixelColor(i, monthlyPresetLedIsLit(i, ledOffset) ? color : 0);
+    strip.setPixelColor(i, monthlyPresetPaletteColorAt(i, ledOffset, &scaled));
   }
   strip.show();
 }
 
-static inline void showActiveSchemeOnOutdoorLeds(uint32_t topColor, uint32_t bottomColor, int brightnessPercent, uint8_t ledOffset) {
+static inline void showActiveSchemeOnOutdoorLeds(const SchemeRecipe* recipe, uint8_t ledOffset) {
   // Top = A1/stripB/12m/2nd floor, bottom = A0/stripA/18m/1st floor — see
-  // the "Pin assignment" comment above. "Off" colors (0,0,0) render as
-  // dark through this same math with no special-casing needed.
-  _renderMonthlyStrip(stripB, STRIP_B_LED_COUNT, monthlyPresetScaleColor(topColor, brightnessPercent), ledOffset);
-  _renderMonthlyStrip(stripA, STRIP_A_LED_COUNT, monthlyPresetScaleColor(bottomColor, brightnessPercent), ledOffset);
+  // the "Pin assignment" comment above. An empty palette (or "off" colors)
+  // renders as dark through this same math with no special-casing needed.
+  _renderMonthlyStrip(stripB, STRIP_B_LED_COUNT, &recipe->top, recipe->brightness, ledOffset);
+  _renderMonthlyStrip(stripA, STRIP_A_LED_COUNT, &recipe->bottom, recipe->brightness, ledOffset);
 }

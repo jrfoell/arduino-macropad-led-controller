@@ -26,6 +26,15 @@
 //                                  work — spreads wear/usage hours evenly
 //                                  and helps surface a dead LED instead of
 //                                  it silently always being a dark one.
+//   monthlyPresetPaletteColorAt(i, offset, palette) — the color outdoor
+//                                  LED i should show: 0 (off) if it isn't
+//                                  lit under the stride/offset above,
+//                                  otherwise the palette color for its
+//                                  position among the lit LEDs — the 1st
+//                                  lit LED gets colors[0], the 2nd
+//                                  colors[1], ... wrapping around, so a
+//                                  palette cycles evenly along the strip.
+//                                  An empty palette (count 0) is all off.
 //   monthlyPresetScaleColor(c, percent) — c scaled to percent (0-100) of
 //                                  its original brightness; same math as
 //                                  the MacroPad's own colors.h, duplicated
@@ -34,6 +43,7 @@
 
 #pragma once
 #include <stdint.h>
+#include "scheme_recipe.h"
 
 #define MONTHLY_PRESET_LED_STRIDE 3  // every 3rd LED lit, spacing the lights out
 
@@ -49,4 +59,13 @@ static inline uint32_t monthlyPresetScaleColor(uint32_t color, uint8_t percent) 
   g = (uint16_t)g * percent / 100;
   b = (uint16_t)b * percent / 100;
   return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+}
+
+static inline uint32_t monthlyPresetPaletteColorAt(uint16_t ledIndex, uint8_t offset, const SchemePalette* palette) {
+  if (palette->count == 0 || !monthlyPresetLedIsLit(ledIndex, offset)) {
+    return 0;
+  }
+  // Lit LEDs sit at offset, offset+stride, offset+2*stride, ... so
+  // ledIndex / stride is each one's 0,1,2,... position among the lit ones.
+  return palette->colors[(ledIndex / MONTHLY_PRESET_LED_STRIDE) % palette->count];
 }

@@ -40,22 +40,22 @@
 //                              it would make the "command received" blink
 //                              effectively solid. Used by
 //                              link_status_led.h's triggerCommandBlink().
-//   consumeSchemeChange(outScheme, outBrightness, outTopColor, outBottomColor)
-//                            — call every loop(); true at most once per
-//                              received QTPY_CMD_SET_SCHEME, filling in the
-//                              0-11 scheme index, 0-100 brightness, and the
-//                              two 0x00RRGGBB strip colors it carried — the
-//                              QT Py has no compiled-in notion of what any
-//                              of these mean, it just passes them through.
-//                              See scheme_storage.h for what to do with
-//                              them (persist + render).
+//   consumeSchemeChange(outRecipe) — call every loop(); true at most once
+//                              per received QTPY_CMD_SET_SCHEME, filling in
+//                              the SchemeRecipe it carried (scheme index,
+//                              brightness, top/bottom palettes — see
+//                              MacropadShared/src/scheme_recipe.h). The QT
+//                              Py has no compiled-in notion of what any of
+//                              it means, it just passes it through. See
+//                              scheme_storage.h for what to do with it
+//                              (persist + render).
 //   consumeBrightnessPreview(outBrightness) — call every loop(); true at
 //                              most once per received
 //                              QTPY_CMD_PREVIEW_BRIGHTNESS, filling in the
 //                              0-100 brightness it carried. Apply
 //                              immediately to the current render; never
 //                              persist (see i2c_protocol.h).
-//   setQueryableSchemeState(scheme, brightness, topColor, bottomColor) —
+//   setQueryableSchemeState(recipe) —
 //                              call whenever the active render state
 //                              actually changes (scheme change, brightness
 //                              preview, or load at boot), so
@@ -66,26 +66,24 @@
 #pragma once
 #include <Wire.h>
 #include "i2c_protocol.h"  // from MacropadShared
+#include "scheme_recipe.h" // from MacropadShared
 
 static volatile bool    _testPatternRunning      = false;
 static volatile bool    _startPending            = false;
 static volatile bool    _commandReceivedPending  = false;
 static volatile bool    _schemeChangePending     = false;
-static volatile uint8_t _pendingSchemeIndex      = 0;
-static volatile uint8_t _pendingBrightness       = 100;
-static volatile uint8_t _pendingTopR = 0, _pendingTopG = 0, _pendingTopB = 0;
-static volatile uint8_t _pendingBottomR = 0, _pendingBottomG = 0, _pendingBottomB = 0;
+// Raw packed SET_SCHEME payload, filled in the ISR, unpacked in loop().
+// Not `volatile` (Wire1.read()/write() take plain pointers) — every
+// loop()-side access is wrapped in noInterrupts()/interrupts() instead.
+static uint8_t _pendingRecipeBytes[SCHEME_RECIPE_PACKED_SIZE];
 static volatile bool    _brightnessPreviewPending = false;
 static volatile uint8_t _pendingPreviewBrightness = 100;
 static volatile uint8_t _lastReceivedCommand = QTPY_CMD_PING;  // anything but QTPY_CMD_QUERY_SCHEME as a safe default
 static volatile unsigned long _lastI2cActivityMs = 0;
 
 // Updated by setQueryableSchemeState(), read by _onI2cRequest() when
-// answering QTPY_CMD_QUERY_SCHEME.
-static volatile uint8_t _currentSchemeIndex = 0;
-static volatile uint8_t _currentBrightness  = 100;
-static volatile uint8_t _currentTopR = 0, _currentTopG = 0, _currentTopB = 0;
-static volatile uint8_t _currentBottomR = 0, _currentBottomG = 0, _currentBottomB = 0;
+// answering QTPY_CMD_QUERY_SCHEME. Same interrupt-guarding as above.
+static uint8_t _currentRecipeBytes[SCHEME_RECIPE_PACKED_SIZE] = { 0, 100 };
 
 static void _onI2cReceive(int numBytes) {
   // NOTE: a bare zero-byte transaction (address only, no Wire.write())
@@ -107,15 +105,10 @@ static void _onI2cReceive(int numBytes) {
   } else if (cmd == QTPY_CMD_STOP) {
     _testPatternRunning = false;
     _commandReceivedPending = true;
-  } else if (cmd == QTPY_CMD_SET_SCHEME && Wire1.available() >= 8) {
-    _pendingSchemeIndex  = Wire1.read();
-    _pendingBrightness   = Wire1.read();
-    _pendingTopR    = Wire1.read();
-    _pendingTopG    = Wire1.read();
-    _pendingTopB    = Wire1.read();
-    _pendingBottomR = Wire1.read();
-    _pendingBottomG = Wire1.read();
-    _pendingBottomB = Wire1.read();
+  } else if (cmd == QTPY_CMD_SET_SCHEME && Wire1.available() >= SCHEME_RECIPE_PACKED_SIZE) {
+    for (uint8_t i = 0; i < SCHEME_RECIPE_PACKED_SIZE; i++) {
+      _pendingRecipeBytes[i] = Wire1.read();
+    }
     _schemeChangePending = true;
     _commandReceivedPending = true;
   } else if (cmd == QTPY_CMD_PREVIEW_BRIGHTNESS && Wire1.available() >= 1) {
@@ -139,14 +132,7 @@ static void _onI2cReceive(int numBytes) {
 
 static void _onI2cRequest() {
   if (_lastReceivedCommand == QTPY_CMD_QUERY_SCHEME) {
-    Wire1.write(_currentSchemeIndex);
-    Wire1.write(_currentBrightness);
-    Wire1.write(_currentTopR);
-    Wire1.write(_currentTopG);
-    Wire1.write(_currentTopB);
-    Wire1.write(_currentBottomR);
-    Wire1.write(_currentBottomG);
-    Wire1.write(_currentBottomB);
+    Wire1.write(_currentRecipeBytes, SCHEME_RECIPE_PACKED_SIZE);
   } else {
     // Covers QTPY_CMD_START's ACK — the host only ever requests a
     // response after Start or Query, so this default is correct for Start.
@@ -154,15 +140,14 @@ static void _onI2cRequest() {
   }
 }
 
-static inline void setQueryableSchemeState(uint8_t scheme, uint8_t brightness, uint32_t topColor, uint32_t bottomColor) {
-  _currentSchemeIndex = scheme;
-  _currentBrightness  = brightness;
-  _currentTopR    = (topColor >> 16) & 0xFF;
-  _currentTopG    = (topColor >> 8)  & 0xFF;
-  _currentTopB    = topColor & 0xFF;
-  _currentBottomR = (bottomColor >> 16) & 0xFF;
-  _currentBottomG = (bottomColor >> 8)  & 0xFF;
-  _currentBottomB = bottomColor & 0xFF;
+static inline void setQueryableSchemeState(const SchemeRecipe* recipe) {
+  uint8_t packed[SCHEME_RECIPE_PACKED_SIZE];
+  packSchemeRecipe(recipe, packed);
+  noInterrupts();
+  for (uint8_t i = 0; i < SCHEME_RECIPE_PACKED_SIZE; i++) {
+    _currentRecipeBytes[i] = packed[i];
+  }
+  interrupts();
 }
 
 static inline void initI2cCommands() {
@@ -192,15 +177,18 @@ static inline bool consumeCommandReceivedPending() {
   return pending;
 }
 
-static inline bool consumeSchemeChange(int* outScheme, int* outBrightness, uint32_t* outTopColor, uint32_t* outBottomColor) {
+static inline bool consumeSchemeChange(SchemeRecipe* outRecipe) {
   if (!_schemeChangePending) {
     return false;
   }
+  uint8_t packed[SCHEME_RECIPE_PACKED_SIZE];
+  noInterrupts();
+  for (uint8_t i = 0; i < SCHEME_RECIPE_PACKED_SIZE; i++) {
+    packed[i] = _pendingRecipeBytes[i];
+  }
   _schemeChangePending = false;
-  *outScheme      = _pendingSchemeIndex;
-  *outBrightness  = _pendingBrightness;
-  *outTopColor    = ((uint32_t)_pendingTopR << 16)    | ((uint32_t)_pendingTopG << 8)    | _pendingTopB;
-  *outBottomColor = ((uint32_t)_pendingBottomR << 16) | ((uint32_t)_pendingBottomG << 8) | _pendingBottomB;
+  interrupts();
+  unpackSchemeRecipe(packed, outRecipe);
   return true;
 }
 

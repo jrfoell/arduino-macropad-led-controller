@@ -254,9 +254,9 @@ static inline void _uiConfirm() {
   } else if (_uiMenuState == UI_MENU_PRESET_LIST) {
     setActiveScheme(_uiPreviewMonth - 1);
     saveSettings(getActiveScheme(), _uiConfirmedBrightness);
-    uint32_t topColor, bottomColor;
-    getSchemeOutdoorColors(getActiveScheme(), &topColor, &bottomColor);
-    setActiveSchemeOnQtpy(getActiveScheme(), _uiConfirmedBrightness, topColor, bottomColor);
+    SchemeRecipe recipe;
+    buildSchemeRecipe(getActiveScheme(), _uiConfirmedBrightness, &recipe);
+    setActiveSchemeOnQtpy(&recipe);
     clearKeypadLeds();
     _uiEntryState  = UI_ENTRY_IDLE;
     _uiMenuState   = UI_MENU_TOP;
@@ -267,9 +267,9 @@ static inline void _uiConfirm() {
     // Same scheme + colors, new brightness — this is the one command that
     // persists on the QT Py side (previewBrightnessOnQtpy(), sent live
     // while the knob was turning, deliberately never persists).
-    uint32_t topColor, bottomColor;
-    getSchemeOutdoorColors(getActiveScheme(), &topColor, &bottomColor);
-    setActiveSchemeOnQtpy(getActiveScheme(), _uiConfirmedBrightness, topColor, bottomColor);
+    SchemeRecipe recipe;
+    buildSchemeRecipe(getActiveScheme(), _uiConfirmedBrightness, &recipe);
+    setActiveSchemeOnQtpy(&recipe);
     clearKeypadLeds();
     _uiMenuState   = UI_MENU_TOP;
     _uiHintUntilMs = 0;
@@ -286,11 +286,9 @@ static inline void _uiConfirm() {
       // persisted state). Silently keeps whatever _uiPreviewMonth already
       // was if the QT Py doesn't answer — the MacroPad works fully without
       // one attached.
-      int qScheme, qBrightness;
-      uint32_t qTopColor, qBottomColor;
-      if (queryActiveSchemeFromQtpy(&qScheme, &qBrightness, &qTopColor, &qBottomColor)
-          && qScheme >= 0 && qScheme < NUM_SCHEMES) {
-        _uiPreviewMonth = qScheme + 1;
+      SchemeRecipe q;
+      if (queryActiveSchemeFromQtpy(&q) && q.scheme < NUM_SCHEMES) {
+        _uiPreviewMonth = q.scheme + 1;
       }
       _uiMenuState = UI_MENU_PRESET_LIST;
       _uiUpdatePreview();

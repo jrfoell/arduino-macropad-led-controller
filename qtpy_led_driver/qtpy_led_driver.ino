@@ -13,10 +13,7 @@
 
 static unsigned long _testPatternStartMs = 0;
 static bool _wasRunning = false;
-static int      _activeScheme     = 0;
-static int      _activeBrightness = 100;
-static uint32_t _activeTopColor    = 0;
-static uint32_t _activeBottomColor = 0;
+static SchemeRecipe _activeRecipe;  // filled by loadScheme() in setup()
 // Fixed for this boot session — rolls to the next value in setup() and
 // isn't touched again until the next power-up/reflash. See
 // scheme_storage.h's loadAndAdvanceLedOffset(): this is what spreads wear
@@ -28,14 +25,14 @@ static uint8_t  _ledOffset = 0;
 // currently active and keeps the query-response state (i2c_commands.h) in
 // sync, so QTPY_CMD_QUERY_SCHEME always answers with the truth.
 static inline void _showActiveScheme() {
-  showActiveSchemeOnOutdoorLeds(_activeTopColor, _activeBottomColor, _activeBrightness, _ledOffset);
-  setQueryableSchemeState(_activeScheme, _activeBrightness, _activeTopColor, _activeBottomColor);
+  showActiveSchemeOnOutdoorLeds(&_activeRecipe, _ledOffset);
+  setQueryableSchemeState(&_activeRecipe);
 }
 
 void setup() {
   DEBUG_BEGIN(115200);
   initSchemeStorage();
-  loadScheme(&_activeScheme, &_activeBrightness, &_activeTopColor, &_activeBottomColor);
+  loadScheme(&_activeRecipe);
   _ledOffset = loadAndAdvanceLedOffset(MONTHLY_PRESET_LED_STRIDE);
   initOutdoorLeds();
   initI2cCommands();
@@ -50,14 +47,10 @@ void loop() {
   }
   updateLinkStatusLed(isHostLinkAlive());
 
-  int newScheme, newBrightness;
-  uint32_t newTopColor, newBottomColor;
-  if (consumeSchemeChange(&newScheme, &newBrightness, &newTopColor, &newBottomColor)) {
-    _activeScheme      = newScheme;
-    _activeBrightness  = newBrightness;
-    _activeTopColor    = newTopColor;
-    _activeBottomColor = newBottomColor;
-    saveScheme(_activeScheme, _activeBrightness, _activeTopColor, _activeBottomColor);
+  SchemeRecipe newRecipe;
+  if (consumeSchemeChange(&newRecipe)) {
+    _activeRecipe = newRecipe;
+    saveScheme(&_activeRecipe);
     // Don't fight a running Test Pattern for the strips — in practice this
     // can't happen through the MacroPad's own UI anyway (selecting a
     // Preset always exits Test Pattern, sending Stop, first), but render
@@ -72,7 +65,7 @@ void loop() {
     // RAM only — never saveScheme() here. The knob can send many of these
     // per second while turning; QTPY_CMD_SET_SCHEME (above) is what
     // persists, sent once when the MacroPad confirms.
-    _activeBrightness = previewBrightness;
+    _activeRecipe.brightness = (uint8_t)previewBrightness;
     if (!isTestPatternRunning()) {
       _showActiveScheme();
     }
