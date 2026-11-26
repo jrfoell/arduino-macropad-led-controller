@@ -15,9 +15,7 @@ the two boards is connected, say so before flashing that one alone — a
 half-flashed protocol change leaves presets unchangeable from the MacroPad
 until the other board catches up.
 
-**Last commit actually flashed: MacroPad `ed6d13e`, QT Py `ba56d06`**
-(the commits in between were MacroPad-only color changes, so the two are
-protocol-compatible).
+**Last commit actually flashed to both physical boards: `626d2c0`.**
 Update this line every time a flash actually happens, so anyone (including
 a fresh session) can tell what's pending. Keep an eye on whether later
 commits touch the I2C protocol (`MacropadShared/src/i2c_protocol.h`) — a
