@@ -36,10 +36,12 @@
 //                          the QT Py's reachability (see "The MacroPad
 //                          works fully with no QT Py attached" in
 //                          ui_controller.h). Payload is exactly
-//                          SCHEME_RECIPE_PACKED_SIZE (52) bytes after the
+//                          SCHEME_RECIPE_PACKED_SIZE (53) bytes after the
 //                          command byte: a packed SchemeRecipe — scheme
 //                          index (0-11, same numbering as the MacroPad's
-//                          led_presets.h), brightness percent (0-100), and
+//                          led_presets.h), a brightness percent (0-100)
+//                          per strip (Brightness x Balance, already
+//                          combined by the MacroPad — see balance.h), and
 //                          a palette of up to SCHEME_PALETTE_MAX_COLORS
 //                          colors per strip. Layout defined once in
 //                          scheme_recipe.h. A shorter payload (e.g. the
@@ -63,12 +65,14 @@
 //                          rather than trusting its own copy could be
 //                          stale (e.g. a QT Py swapped for a spare unit).
 //   QTPY_CMD_PREVIEW_BRIGHTNESS — live brightness preview while the
-//                          Brightness knob is turning, applied immediately
-//                          to whatever scheme is currently showing but
-//                          deliberately NOT persisted to the QT Py's flash
-//                          (QTPY_CMD_SET_SCHEME is what persists — sent
-//                          once, on confirm). Fire-and-forget, 1 payload
-//                          byte (brightness percent, 0-100). Like
+//                          Brightness or Balance knob is turning, applied
+//                          immediately to whatever scheme is currently
+//                          showing but deliberately NOT persisted to the
+//                          QT Py's flash (QTPY_CMD_SET_SCHEME is what
+//                          persists — sent once, on confirm).
+//                          Fire-and-forget, 2 payload bytes: top-strip
+//                          percent, bottom-strip percent (0-100 each,
+//                          Brightness x Balance already combined). Like
 //                          QTPY_CMD_PING, this is excluded from the
 //                          command-received blink (link_status_led.h) —
 //                          it fires on every encoder detent while turning

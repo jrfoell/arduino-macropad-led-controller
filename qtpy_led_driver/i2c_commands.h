@@ -49,10 +49,11 @@
 //                              it means, it just passes it through. See
 //                              scheme_storage.h for what to do with it
 //                              (persist + render).
-//   consumeBrightnessPreview(outBrightness) — call every loop(); true at
-//                              most once per received
+//   consumeBrightnessPreview(outTop, outBottom) — call every loop(); true
+//                              at most once per received
 //                              QTPY_CMD_PREVIEW_BRIGHTNESS, filling in the
-//                              0-100 brightness it carried. Apply
+//                              0-100 top-strip and bottom-strip percents it
+//                              carried. Apply
 //                              immediately to the current render; never
 //                              persist (see i2c_protocol.h).
 //   setQueryableSchemeState(recipe) —
@@ -77,7 +78,8 @@ static volatile bool    _schemeChangePending     = false;
 // loop()-side access is wrapped in noInterrupts()/interrupts() instead.
 static uint8_t _pendingRecipeBytes[SCHEME_RECIPE_PACKED_SIZE];
 static volatile bool    _brightnessPreviewPending = false;
-static volatile uint8_t _pendingPreviewBrightness = 100;
+static volatile uint8_t _pendingPreviewTop    = 100;
+static volatile uint8_t _pendingPreviewBottom = 100;
 static volatile uint8_t _lastReceivedCommand = QTPY_CMD_PING;  // anything but QTPY_CMD_QUERY_SCHEME as a safe default
 static volatile unsigned long _lastI2cActivityMs = 0;
 
@@ -111,8 +113,9 @@ static void _onI2cReceive(int numBytes) {
     }
     _schemeChangePending = true;
     _commandReceivedPending = true;
-  } else if (cmd == QTPY_CMD_PREVIEW_BRIGHTNESS && Wire1.available() >= 1) {
-    _pendingPreviewBrightness = Wire1.read();
+  } else if (cmd == QTPY_CMD_PREVIEW_BRIGHTNESS && Wire1.available() >= 2) {
+    _pendingPreviewTop    = Wire1.read();
+    _pendingPreviewBottom = Wire1.read();
     _brightnessPreviewPending = true;
     // Deliberately NOT setting _commandReceivedPending — see
     // i2c_protocol.h: this fires on every encoder detent while the knob
@@ -192,11 +195,14 @@ static inline bool consumeSchemeChange(SchemeRecipe* outRecipe) {
   return true;
 }
 
-static inline bool consumeBrightnessPreview(int* outBrightness) {
+static inline bool consumeBrightnessPreview(uint8_t* outTop, uint8_t* outBottom) {
   if (!_brightnessPreviewPending) {
     return false;
   }
+  noInterrupts();
   _brightnessPreviewPending = false;
-  *outBrightness = _pendingPreviewBrightness;
+  *outTop    = _pendingPreviewTop;
+  *outBottom = _pendingPreviewBottom;
+  interrupts();
   return true;
 }

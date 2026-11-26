@@ -1,7 +1,9 @@
 // scheme_recipe.h
 // The full visual "recipe" for one monthly scheme, as the MacroPad
-// (instructor) sends it to the QT Py (executor): scheme index, brightness,
-// and a small color palette per strip. On the strips, the lit LEDs (every
+// (instructor) sends it to the QT Py (executor): scheme index, one
+// brightness percent per strip (the MacroPad has already folded the global
+// Brightness and Balance settings into these — see balance.h), and a small
+// color palette per strip. On the strips, the lit LEDs (every
 // MONTHLY_PRESET_LED_STRIDE-th one, see monthly_presets.h) cycle through
 // their strip's palette in order, e.g. a 2-color red/white palette lights
 // red, (dark, dark), white, (dark, dark), red, ...
@@ -12,17 +14,20 @@
 //   - the QTPY_CMD_QUERY_SCHEME response (QT Py -> MacroPad)
 //   - the QT Py's own flash copy (qtpy_led_driver/scheme_storage.h)
 //
-// Packed layout (SCHEME_RECIPE_PACKED_SIZE = 52 bytes):
-//   [0] scheme index (0-11)   [1] brightness percent (0-100)
-//   [2] top color count       [3] bottom color count
-//   [4 .. 4+3*MAX)            top palette, R,G,B per color, unused slots 0
-//   [4+3*MAX .. 4+6*MAX)      bottom palette, same
+// Packed layout (SCHEME_RECIPE_PACKED_SIZE = 53 bytes):
+//   [0] scheme index (0-11)
+//   [1] top-strip brightness percent (0-100)
+//   [2] bottom-strip brightness percent (0-100)
+//   [3] top color count       [4] bottom color count
+//   [5 .. 5+3*MAX)            top palette, R,G,B per color, unused slots 0
+//   [5+3*MAX .. 5+6*MAX)      bottom palette, same
 // Well within the arduino-pico core's 256-byte Wire buffer.
 //
 // Exposes:
 //   SCHEME_PALETTE_MAX_COLORS — max colors per strip palette
 //   SchemePalette             — { count, colors[] } (0x00RRGGBB colors)
-//   SchemeRecipe              — { scheme, brightness, top, bottom }
+//   SchemeRecipe              — { scheme, topBrightness, bottomBrightness,
+//                                 top, bottom }
 //   SCHEME_RECIPE_PACKED_SIZE — byte size of the packed layout above
 //   packSchemeRecipe(recipe, out)   — recipe -> bytes (unused slots zeroed)
 //   unpackSchemeRecipe(in, recipe)  — bytes -> recipe (counts clamped to
@@ -34,7 +39,7 @@
 #include <stdint.h>
 
 #define SCHEME_PALETTE_MAX_COLORS 8
-#define SCHEME_RECIPE_PACKED_SIZE (4 + 2 * SCHEME_PALETTE_MAX_COLORS * 3)
+#define SCHEME_RECIPE_PACKED_SIZE (5 + 2 * SCHEME_PALETTE_MAX_COLORS * 3)
 
 struct SchemePalette {
   uint8_t  count;
@@ -43,7 +48,8 @@ struct SchemePalette {
 
 struct SchemeRecipe {
   uint8_t       scheme;
-  uint8_t       brightness;
+  uint8_t       topBrightness;     // 0-100, already includes Balance
+  uint8_t       bottomBrightness;  // 0-100, already includes Balance
   SchemePalette top;     // A1 / strip B / 12m / 2nd floor
   SchemePalette bottom;  // A0 / strip A / 18m / 1st floor
 };
@@ -66,19 +72,21 @@ static inline void _unpackPalette(uint8_t count, const uint8_t* in, SchemePalett
 
 static inline void packSchemeRecipe(const SchemeRecipe* r, uint8_t out[SCHEME_RECIPE_PACKED_SIZE]) {
   out[0] = r->scheme;
-  out[1] = r->brightness;
-  out[2] = (r->top.count > SCHEME_PALETTE_MAX_COLORS) ? SCHEME_PALETTE_MAX_COLORS : r->top.count;
-  out[3] = (r->bottom.count > SCHEME_PALETTE_MAX_COLORS) ? SCHEME_PALETTE_MAX_COLORS : r->bottom.count;
+  out[1] = r->topBrightness;
+  out[2] = r->bottomBrightness;
+  out[3] = (r->top.count > SCHEME_PALETTE_MAX_COLORS) ? SCHEME_PALETTE_MAX_COLORS : r->top.count;
+  out[4] = (r->bottom.count > SCHEME_PALETTE_MAX_COLORS) ? SCHEME_PALETTE_MAX_COLORS : r->bottom.count;
   SchemePalette top = r->top, bottom = r->bottom;
-  top.count = out[2];
-  bottom.count = out[3];
-  _packPalette(&top, out + 4);
-  _packPalette(&bottom, out + 4 + SCHEME_PALETTE_MAX_COLORS * 3);
+  top.count = out[3];
+  bottom.count = out[4];
+  _packPalette(&top, out + 5);
+  _packPalette(&bottom, out + 5 + SCHEME_PALETTE_MAX_COLORS * 3);
 }
 
 static inline void unpackSchemeRecipe(const uint8_t in[SCHEME_RECIPE_PACKED_SIZE], SchemeRecipe* r) {
-  r->scheme     = in[0];
-  r->brightness = in[1];
-  _unpackPalette(in[2], in + 4, &r->top);
-  _unpackPalette(in[3], in + 4 + SCHEME_PALETTE_MAX_COLORS * 3, &r->bottom);
+  r->scheme           = in[0];
+  r->topBrightness    = in[1];
+  r->bottomBrightness = in[2];
+  _unpackPalette(in[3], in + 5, &r->top);
+  _unpackPalette(in[4], in + 5 + SCHEME_PALETTE_MAX_COLORS * 3, &r->bottom);
 }

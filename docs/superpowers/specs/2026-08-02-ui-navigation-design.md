@@ -240,6 +240,13 @@ to any future color content (the eventual Custom-build palette included):
   low-saturation-near-white — aim for roughly half-saturated rather than
   quarter-saturated when a color needs to read as soft *and* identifiable.
 
+## Balance menu (decided 2026-11-25)
+
+Added directly below Brightness; the top-level list is now "Brightness",
+"Balance", "Presets", "Custom", "Test Pattern". Same interaction as
+Brightness (rotary-only, live preview, persisted on confirm). Full design:
+`docs/superpowers/specs/2026-11-25-balance-design.md`.
+
 ## Brightness menu (decided)
 
 Added as a new top-level menu item, **above** Presets: the top-level list is

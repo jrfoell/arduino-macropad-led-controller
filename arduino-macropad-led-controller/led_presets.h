@@ -32,8 +32,11 @@
 //   renderActiveScheme()                — call every loop(); intentional no-op
 //   getSchemePreviewColors(index, out)  — fills out[NUM_NEOPIXEL] with the
 //                                          keypad preview for scheme `index`
-//   buildSchemeRecipe(index, brightnessPercent, outRecipe) — fills in the
-//                                          full SchemeRecipe (see
+//   buildSchemeRecipe(index, brightnessPercent, balancePercent, outRecipe)
+//                                        — fills in the full SchemeRecipe,
+//                                          Brightness x Balance folded into
+//                                          one percent per strip
+//                                          (MacropadShared's balance.h) (see
 //                                          MacropadShared/src/scheme_recipe.h)
 //                                          for scheme `index` — exactly what
 //                                          gets sent to the QT Py
@@ -44,6 +47,7 @@
 #include "led_output.h"
 #include "colors.h"
 #include <scheme_recipe.h>  // from MacropadShared
+#include <balance.h>        // from MacropadShared
 
 #define NUM_SCHEMES 12
 
@@ -166,9 +170,9 @@ static inline void _fillPalette(SchemePalette* out, const uint32_t* colors, uint
   for (uint8_t i = 0; i < count; i++) out->colors[i] = colors[i];
 }
 
-static inline void buildSchemeRecipe(int schemeIndex, int brightnessPercent, SchemeRecipe* out) {
-  out->scheme     = (uint8_t)schemeIndex;
-  out->brightness = (uint8_t)brightnessPercent;
+static inline void buildSchemeRecipe(int schemeIndex, int brightnessPercent, int balancePercent, SchemeRecipe* out) {
+  out->scheme = (uint8_t)schemeIndex;
+  balanceStripPercents((uint8_t)brightnessPercent, (uint8_t)balancePercent, &out->topBrightness, &out->bottomBrightness);
   if (schemeIndex < 0 || schemeIndex >= NUM_SCHEMES) {
     out->top.count    = 0;
     out->bottom.count = 0;

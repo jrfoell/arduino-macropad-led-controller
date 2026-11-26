@@ -53,9 +53,12 @@
 //                              buildSchemeRecipe() — the MacroPad is the
 //                              sole authority on scheme content, the QT Py
 //                              has none of its own.
-//   previewBrightnessOnQtpy(brightnessPercent) — fire-and-forget, sent on
-//                              every Brightness-knob detent while turning
-//                              it (not just on confirm) so the real strips
+//   previewBrightnessOnQtpy(topPercent, bottomPercent) — fire-and-forget,
+//                              sent on every Brightness- or Balance-knob
+//                              detent while turning it (not just on
+//                              confirm), with Brightness x Balance already
+//                              folded into one percent per strip
+//                              (balance.h), so the real strips
 //                              update live; the QT Py applies this to RAM
 //                              only, never flash — see i2c_protocol.h
 //   queryActiveSchemeFromQtpy(outRecipe) — two-way communication, the
@@ -125,10 +128,11 @@ static inline bool queryActiveSchemeFromQtpy(SchemeRecipe* outRecipe) {
   return true;
 }
 
-static inline void previewBrightnessOnQtpy(int brightnessPercent) {
+static inline void previewBrightnessOnQtpy(uint8_t topPercent, uint8_t bottomPercent) {
   Wire.beginTransmission(QTPY_I2C_ADDRESS);
   Wire.write(QTPY_CMD_PREVIEW_BRIGHTNESS);
-  Wire.write((uint8_t)brightnessPercent);
+  Wire.write(topPercent);
+  Wire.write(bottomPercent);
   Wire.endTransmission();
 }
 

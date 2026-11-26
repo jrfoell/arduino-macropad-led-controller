@@ -9,7 +9,8 @@ int main() {
   SchemeRecipe r;
   memset(&r, 0xEE, sizeof(r));  // garbage beyond `count` must not leak into the packed bytes
   r.scheme     = 6;
-  r.brightness = 75;
+  r.topBrightness    = 75;
+  r.bottomBrightness = 40;
   r.top.count  = 3;
   r.top.colors[0] = 0x00C80000; r.top.colors[1] = 0x00646464; r.top.colors[2] = 0x000000C8;
   r.bottom.count = 1;
@@ -17,18 +18,18 @@ int main() {
 
   uint8_t buf[SCHEME_RECIPE_PACKED_SIZE];
   packSchemeRecipe(&r, buf);
-  assert(SCHEME_RECIPE_PACKED_SIZE == 4 + 2 * SCHEME_PALETTE_MAX_COLORS * 3);
-  assert(buf[0] == 6 && buf[1] == 75 && buf[2] == 3 && buf[3] == 1);
-  assert(buf[4] == 0xC8 && buf[5] == 0x00 && buf[6] == 0x00);  // top[0] R,G,B
-  assert(buf[7] == 0x64 && buf[8] == 0x64 && buf[9] == 0x64);  // top[1]
+  assert(SCHEME_RECIPE_PACKED_SIZE == 5 + 2 * SCHEME_PALETTE_MAX_COLORS * 3);
+  assert(buf[0] == 6 && buf[1] == 75 && buf[2] == 40 && buf[3] == 3 && buf[4] == 1);
+  assert(buf[5] == 0xC8 && buf[6] == 0x00 && buf[7] == 0x00);  // top[0] R,G,B
+  assert(buf[8] == 0x64 && buf[9] == 0x64 && buf[10] == 0x64);  // top[1]
   // Unused top slots are zeroed, not garbage
-  for (int i = 4 + 3 * 3; i < 4 + SCHEME_PALETTE_MAX_COLORS * 3; i++) assert(buf[i] == 0);
-  int bottomBase = 4 + SCHEME_PALETTE_MAX_COLORS * 3;
+  for (int i = 5 + 3 * 3; i < 5 + SCHEME_PALETTE_MAX_COLORS * 3; i++) assert(buf[i] == 0);
+  int bottomBase = 5 + SCHEME_PALETTE_MAX_COLORS * 3;
   assert(buf[bottomBase] == 0xA0 && buf[bottomBase + 1] == 0x14 && buf[bottomBase + 2] == 0x00);
 
   SchemeRecipe back;
   unpackSchemeRecipe(buf, &back);
-  assert(back.scheme == 6 && back.brightness == 75);
+  assert(back.scheme == 6 && back.topBrightness == 75 && back.bottomBrightness == 40);
   assert(back.top.count == 3 && back.bottom.count == 1);
   assert(back.top.colors[0] == 0x00C80000);
   assert(back.top.colors[1] == 0x00646464);
@@ -36,7 +37,7 @@ int main() {
   assert(back.bottom.colors[0] == 0x00A01400);
 
   // A corrupt/oversized count is clamped rather than indexing past the array
-  buf[2] = 200;
+  buf[3] = 200;
   unpackSchemeRecipe(buf, &back);
   assert(back.top.count == SCHEME_PALETTE_MAX_COLORS);
 

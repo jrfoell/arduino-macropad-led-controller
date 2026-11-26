@@ -16,13 +16,14 @@
 //   loadScheme(outRecipe)                — fills in the last-saved
 //                                           SchemeRecipe (see
 //                                           MacropadShared/src/scheme_recipe.h),
-//                                           or defaults (scheme 0,
-//                                           brightness 100, both palettes
+//                                           or defaults (scheme 0, both
+//                                           strips at 100%, both palettes
 //                                           empty = off) if nothing was
-//                                           ever saved. Also reads the
-//                                           older single-color-per-strip
-//                                           layout (SCHEME_MAGIC_V1) as
-//                                           1-color palettes, so a QT Py
+//                                           ever saved. Also migrates both
+//                                           older layouts — V1
+//                                           (single color per strip) and V2
+//                                           (palettes, one shared
+//                                           brightness) — so a QT Py
 //                                           flashed with this version keeps
 //                                           showing what it showed before,
 //                                           until the MacroPad next sends a
@@ -58,7 +59,8 @@
 // of the same flash sector, so addresses 0-15 read back exactly as before.
 #define SCHEME_EEPROM_SIZE 128   // bytes reserved for the emulated EEPROM region
 #define SCHEME_MAGIC_V1    0xB2  // old layout: one color per strip at addrs 1-8 (read-only now, for migration)
-#define SCHEME_MAGIC       0xB3  // current layout: packed SchemeRecipe at SCHEME_ADDR_RECIPE. Distinct from the MacroPad's own SETTINGS_MAGIC (0xB1) — separate chips, but keeps the sentinels visually distinguishable in debug logs
+#define SCHEME_MAGIC_V2    0xB3  // old layout: 52-byte recipe at SCHEME_ADDR_RECIPE with ONE brightness byte (read-only now, for migration)
+#define SCHEME_MAGIC       0xB4  // current layout: packed 53-byte SchemeRecipe (per-strip brightness) at SCHEME_ADDR_RECIPE. Distinct from the MacroPad's own SETTINGS_MAGIC (0xB1) — separate chips, but keeps the sentinels visually distinguishable in debug logs
 
 #define SCHEME_ADDR_MAGIC      0
 // V1-only fields (addrs 1-8), kept so an old save can be migrated:
@@ -87,23 +89,39 @@ static inline void loadScheme(SchemeRecipe* outRecipe) {
     }
     unpackSchemeRecipe(packed, outRecipe);
     DEBUG_PRINT("Scheme storage: loaded scheme="); DEBUG_PRINT(outRecipe->scheme);
+  } else if (magic == SCHEME_MAGIC_V2) {
+    // V2 = today's layout minus the bottom-brightness byte: [0] scheme
+    // [1] brightness [2..] counts + palettes. Rebuild it in the current
+    // layout with that one brightness applied to both strips.
+    uint8_t packed[SCHEME_RECIPE_PACKED_SIZE];
+    packed[0] = EEPROM.read(SCHEME_ADDR_RECIPE);
+    packed[1] = EEPROM.read(SCHEME_ADDR_RECIPE + 1);
+    packed[2] = packed[1];
+    for (uint8_t i = 3; i < SCHEME_RECIPE_PACKED_SIZE; i++) {
+      packed[i] = EEPROM.read(SCHEME_ADDR_RECIPE + i - 1);
+    }
+    unpackSchemeRecipe(packed, outRecipe);
+    DEBUG_PRINT("Scheme storage: migrated V2 scheme="); DEBUG_PRINT(outRecipe->scheme);
   } else if (magic == SCHEME_MAGIC_V1) {
-    outRecipe->scheme     = EEPROM.read(SCHEME_ADDR_V1_SCHEME);
-    outRecipe->brightness = EEPROM.read(SCHEME_ADDR_V1_BRIGHTNESS);
+    outRecipe->scheme           = EEPROM.read(SCHEME_ADDR_V1_SCHEME);
+    outRecipe->topBrightness    = EEPROM.read(SCHEME_ADDR_V1_BRIGHTNESS);
+    outRecipe->bottomBrightness = outRecipe->topBrightness;
     outRecipe->top.count        = 1;
     outRecipe->top.colors[0]    = _readV1Color(SCHEME_ADDR_V1_TOP_RGB);
     outRecipe->bottom.count     = 1;
     outRecipe->bottom.colors[0] = _readV1Color(SCHEME_ADDR_V1_BOTTOM_RGB);
     DEBUG_PRINT("Scheme storage: migrated V1 scheme="); DEBUG_PRINT(outRecipe->scheme);
   } else {
-    outRecipe->scheme       = 0;
-    outRecipe->brightness   = 100;
+    outRecipe->scheme           = 0;
+    outRecipe->topBrightness    = 100;
+    outRecipe->bottomBrightness = 100;
     outRecipe->top.count    = 0;
     outRecipe->bottom.count = 0;
     DEBUG_PRINTLN("Scheme storage: no saved scheme, using defaults");
     return;
   }
-  DEBUG_PRINT(" brightness="); DEBUG_PRINT(outRecipe->brightness);
+  DEBUG_PRINT(" top%="); DEBUG_PRINT(outRecipe->topBrightness);
+  DEBUG_PRINT(" bottom%="); DEBUG_PRINT(outRecipe->bottomBrightness);
   DEBUG_PRINT(" topColors="); DEBUG_PRINT(outRecipe->top.count);
   DEBUG_PRINT(" bottomColors="); DEBUG_PRINTLN(outRecipe->bottom.count);
 }
@@ -117,7 +135,8 @@ static inline void saveScheme(const SchemeRecipe* recipe) {
   EEPROM.write(SCHEME_ADDR_MAGIC, SCHEME_MAGIC);
   EEPROM.commit();
   DEBUG_PRINT("Scheme storage: saved scheme="); DEBUG_PRINT(recipe->scheme);
-  DEBUG_PRINT(" brightness="); DEBUG_PRINTLN(recipe->brightness);
+  DEBUG_PRINT(" top%="); DEBUG_PRINT(recipe->topBrightness);
+  DEBUG_PRINT(" bottom%="); DEBUG_PRINTLN(recipe->bottomBrightness);
 }
 
 static inline uint8_t loadAndAdvanceLedOffset(uint8_t stride) {

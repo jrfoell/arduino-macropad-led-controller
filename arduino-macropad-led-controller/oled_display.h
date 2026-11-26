@@ -14,11 +14,18 @@
 // Exposes:
 //   initOledDisplay()                                  — call once in setup()
 //   renderMenuTop(highlightIndex)                       — 0=Brightness,
-//                                                          1=Presets, 2=Custom,
-//                                                          3=Test Pattern
+//                                                          1=Balance,
+//                                                          2=Presets, 3=Custom,
+//                                                          4=Test Pattern
+//                                                          (TOP_MENU_ITEM_COUNT)
 //   renderMenuPresetList(highlightMonth, names, count)  — 1-based month,
 //                                                          scrolls a 6-row window
 //   renderMenuBrightness(percent)                       — 0-100, text progress bar
+//   renderMenuBalance(percent, topScale, bottomScale)   — 0-100 balance bar
+//                                                          (50 = even) plus a
+//                                                          row showing each
+//                                                          strip's resulting
+//                                                          0-100 dimming
 //   renderMenuTestPattern()                             — static "running" display
 //   renderMessage(msg)                                  — "" clears the zone
 //   renderInputLine(text)                               — "" clears the zone
@@ -93,11 +100,13 @@ static inline void _drawRow(uint8_t row, const char* text) {
   display.print(buf);
 }
 
+#define TOP_MENU_ITEM_COUNT 5
+
 static inline void renderMenuTop(int highlightIndex) {
-  static const char* const TOP_MENU_ITEMS[4] = {"Brightness", "Presets", "Custom", "Test Pattern"};
+  static const char* const TOP_MENU_ITEMS[TOP_MENU_ITEM_COUNT] = {"Brightness", "Balance", "Presets", "Custom", "Test Pattern"};
   char line[OLED_TEXT_COLS + 1];
   for (int row = 0; row < OLED_MENU_ROWS; row++) {
-    if (row < 4) {
+    if (row < TOP_MENU_ITEM_COUNT) {
       snprintf(line, sizeof(line), "%c%s", (row == highlightIndex) ? '>' : ' ', TOP_MENU_ITEMS[row]);
       _drawRow(row, line);
     } else {
@@ -107,9 +116,9 @@ static inline void renderMenuTop(int highlightIndex) {
   display.display();
 }
 
-// percent is 0-100. Renders a label row and a text progress bar row (e.g.
-// "[#########     ] 68%"), then blanks the rest of the menu zone.
-static inline void renderMenuBrightness(int percent) {
+// percent is 0-100. Draws a text progress bar row (e.g.
+// "[#########     ]  68%") on the given menu row.
+static inline void _drawPercentBarRow(int row, int percent) {
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
 
@@ -120,10 +129,29 @@ static inline void renderMenuBrightness(int percent) {
   bar[barWidth] = '\0';
 
   char line[OLED_TEXT_COLS + 1];
-  _drawRow(0, "Brightness");
   snprintf(line, sizeof(line), "[%s] %3d%%", bar, percent);
-  _drawRow(1, line);
+  _drawRow(row, line);
+}
+
+// Renders a label row and the progress bar row, then blanks the rest of
+// the menu zone.
+static inline void renderMenuBrightness(int percent) {
+  _drawRow(0, "Brightness");
+  _drawPercentBarRow(1, percent);
   for (int row = 2; row < OLED_MENU_ROWS; row++) _drawRow(row, "");
+  display.display();
+}
+
+// Same bar as Brightness (50% = even), plus a row spelling out what it
+// does to each strip — so "top floor off for maintenance" (0%) reads
+// unambiguously as "Top   0%".
+static inline void renderMenuBalance(int percent, int topScale, int bottomScale) {
+  char line[OLED_TEXT_COLS + 1];
+  _drawRow(0, "Balance");
+  _drawPercentBarRow(1, percent);
+  snprintf(line, sizeof(line), "Top %3d%%  Bot %3d%%", topScale, bottomScale);
+  _drawRow(2, line);
+  for (int row = 3; row < OLED_MENU_ROWS; row++) _drawRow(row, "");
   display.display();
 }
 

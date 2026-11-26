@@ -60,12 +60,13 @@ void loop() {
     }
   }
 
-  int previewBrightness;
-  if (consumeBrightnessPreview(&previewBrightness)) {
+  uint8_t previewTop, previewBottom;
+  if (consumeBrightnessPreview(&previewTop, &previewBottom)) {
     // RAM only — never saveScheme() here. The knob can send many of these
     // per second while turning; QTPY_CMD_SET_SCHEME (above) is what
     // persists, sent once when the MacroPad confirms.
-    _activeRecipe.brightness = (uint8_t)previewBrightness;
+    _activeRecipe.topBrightness    = previewTop;
+    _activeRecipe.bottomBrightness = previewBottom;
     if (!isTestPatternRunning()) {
       _showActiveScheme();
     }

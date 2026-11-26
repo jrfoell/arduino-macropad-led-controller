@@ -25,8 +25,11 @@
 //                                                SchemeRecipe's top-strip/
 //                                                bottom-strip palettes (as
 //                                                sent by the MacroPad — see
-//                                                qtpy_led_driver.ino) at its
-//                                                0-100 brightness, lit LEDs
+//                                                qtpy_led_driver.ino), each
+//                                                strip at its own 0-100
+//                                                brightness (the MacroPad
+//                                                already folded Balance in),
+//                                                lit LEDs
 //                                                cycling through each
 //                                                strip's palette in order
 //                                                (monthly_presets.h's
@@ -121,6 +124,6 @@ static inline void showActiveSchemeOnOutdoorLeds(const SchemeRecipe* recipe, uin
   // Top = A1/stripB/12m/2nd floor, bottom = A0/stripA/18m/1st floor — see
   // the "Pin assignment" comment above. An empty palette (or "off" colors)
   // renders as dark through this same math with no special-casing needed.
-  _renderMonthlyStrip(stripB, STRIP_B_LED_COUNT, &recipe->top, recipe->brightness, ledOffset);
-  _renderMonthlyStrip(stripA, STRIP_A_LED_COUNT, &recipe->bottom, recipe->brightness, ledOffset);
+  _renderMonthlyStrip(stripB, STRIP_B_LED_COUNT, &recipe->top, recipe->topBrightness, ledOffset);
+  _renderMonthlyStrip(stripA, STRIP_A_LED_COUNT, &recipe->bottom, recipe->bottomBrightness, ledOffset);
 }

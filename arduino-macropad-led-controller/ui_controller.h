@@ -7,9 +7,20 @@
 // "Presets" branch (verb 1) is implemented end to end, reachable either by
 // keypad (<verb> 1 <noun> <digits>) or by the OLED menu (rotary scroll +
 // press). "Custom" and pattern verbs (2+) are not implemented yet — picking
-// "Custom" from the top menu just shows a placeholder hint. "Brightness" is
-// intentionally rotary-only, no keypad equivalent — a continuous 0-100
-// value fits the rotary knob's turn-to-adjust motion better than digit entry.
+// "Custom" from the top menu just shows a placeholder hint. "Brightness" and
+// "Balance" are intentionally rotary-only, no keypad equivalent — a
+// continuous 0-100 value fits the rotary knob's turn-to-adjust motion
+// better than digit entry.
+//
+// "Balance" (docs/superpowers/specs/2026-11-25-balance-design.md) shifts
+// brightness between the top strip and bottom strip without ever raising
+// either above Brightness: 50 = even, above 50 dims the bottom strip,
+// below 50 dims the top, fully dark at 0/100 (0 doubles as "top floor off
+// for maintenance"). The MacroPad folds Brightness x Balance into one
+// percent per strip (MacropadShared's balance.h) before sending anything —
+// the QT Py has no notion of balance. Every keypad preview applies it too:
+// keys 0-5 (top 2 rows) stand for the top strip, keys 6-11 the bottom.
+// Test Pattern ignores it (a diagnostic must light everything).
 //
 // Known rough edges, left as-is for now and flagged rather than solved:
 //   - Message/input text was condensed to fit the 21-char/line OLED budget
@@ -22,10 +33,6 @@
 //     wrong in practice.
 //   - Confirming always returns to the top-level menu afterward — not
 //     explicitly decided, just a reasonable default.
-//   - Applying brightness to the *outdoor* installation is still stubbed
-//     (debug print only) — no `led_output.h` API exists yet to call. Flash
-//     persistence of both the active scheme and brightness, however, is
-//     real (see settings_storage.h).
 //
 // After OLED_IDLE_TIMEOUT_MS (1 min) with no keypad/rotary input, the OLED
 // panel powers off (oled_display.h's sleepOledDisplay()) regardless of menu
@@ -37,7 +44,7 @@
 // QT Py has no compiled-in knowledge of any scheme and just stores +
 // renders whatever recipe (colors, brightness) it's sent, persisting it to
 // its own flash (qtpy_link.h's setActiveSchemeOnQtpy(), sent on every
-// Preset and Brightness confirm). Tuning a color is therefore purely a
+// Preset, Brightness, and Balance confirm). Tuning a color is therefore purely a
 // MacroPad-side change (led_presets.h) — the QT Py never needs reflashing
 // for content, only for logic changes. Two-way: entering the Presets menu
 // queries the QT Py for what it's actually showing
@@ -45,8 +52,8 @@
 // copy, since the QT Py's own persisted state is the real source of truth
 // for what's physically outdoors.
 //
-// The MacroPad works fully with no QT Py attached — Brightness/Presets
-// never touch it, and Test Pattern degrades gracefully rather than failing:
+// The MacroPad works fully with no QT Py attached — Brightness/Balance/
+// Presets only ever send it fire-and-forget updates, and Test Pattern degrades gracefully rather than failing:
 // selecting it always enters UI_MENU_TEST_PATTERN and always runs the
 // keypad-LED preview with correct sequence/timing (useful for verifying
 // Test Pattern on the keypad alone before any outdoor hardware exists),
@@ -86,13 +93,20 @@
 // derived from this same constant, so it lives in the shared header rather
 // than being redefined here.
 
-enum UiMenuState  { UI_MENU_TOP, UI_MENU_PRESET_LIST, UI_MENU_BRIGHTNESS, UI_MENU_TEST_PATTERN };
+enum UiMenuState  { UI_MENU_TOP, UI_MENU_PRESET_LIST, UI_MENU_BRIGHTNESS, UI_MENU_BALANCE, UI_MENU_TEST_PATTERN };
+
+// Top-menu row indexes — must match oled_display.h's TOP_MENU_ITEMS order.
+#define UI_TOP_BRIGHTNESS   0
+#define UI_TOP_BALANCE      1
+#define UI_TOP_PRESETS      2
+#define UI_TOP_CUSTOM       3
+#define UI_TOP_TEST_PATTERN 4
 enum UiEntryState { UI_ENTRY_IDLE, UI_ENTRY_VERB, UI_ENTRY_NOUN };
 
 static UiMenuState  _uiMenuState  = UI_MENU_TOP;
 static UiEntryState _uiEntryState = UI_ENTRY_IDLE;
 
-static int _uiTopHighlight   = 0;      // 0=Brightness, 1=Presets, 2=Custom, 3=Test Pattern
+static int _uiTopHighlight   = UI_TOP_BRIGHTNESS;  // one of UI_TOP_*
 static int _uiVerbCode       = -1;     // -1 = no digit entered yet this verb session
 static int _uiPreviewMonth   = 1;      // 1-12, shared by rotary browse + noun digit entry
 static bool _uiNounHasDigits = false;  // has at least one digit been typed this noun session
@@ -104,8 +118,10 @@ static unsigned long _uiQtpyStatusCheckedAt = 0;
 
 // Overwritten from flash in initUiController() (see settings_storage.h) —
 // these initializers are just the pre-boot default.
-static int _uiConfirmedBrightness = 100;  // 0-100, applied to every preview + (stubbed) outdoor output
+static int _uiConfirmedBrightness = 100;  // 0-100, applied to every preview + the outdoor strips
 static int _uiPendingBrightness   = 100;  // 0-100, live value while UI_MENU_BRIGHTNESS is active
+static int _uiConfirmedBalance    = BALANCE_DEFAULT_PERCENT;  // 0-100, 50 = even
+static int _uiPendingBalance      = BALANCE_DEFAULT_PERCENT;  // live value while UI_MENU_BALANCE is active
 
 static unsigned long _uiHintUntilMs = 0;
 static char _uiHintText[OLED_TEXT_COLS + 1] = "";
@@ -115,9 +131,13 @@ static inline void _uiShowHint(const char* text) {
   _uiHintUntilMs = millis() + UI_HINT_DURATION_MS;
 }
 
-static inline void _uiShowPreviewColors(uint32_t colors[NUM_NEOPIXEL], int brightnessPercent) {
+// Keys 0-5 (top 2 rows) mirror the top strip, keys 6-11 the bottom strip
+// — same split as led_presets.h's getSchemePreviewColors().
+static inline void _uiShowPreviewColors(uint32_t colors[NUM_NEOPIXEL], int brightnessPercent, int balancePercent) {
+  uint8_t topPercent, bottomPercent;
+  balanceStripPercents((uint8_t)brightnessPercent, (uint8_t)balancePercent, &topPercent, &bottomPercent);
   for (uint8_t i = 0; i < NUM_NEOPIXEL; i++) {
-    colors[i] = scaleColorBrightness(colors[i], brightnessPercent);
+    colors[i] = scaleColorBrightness(colors[i], (i < NUM_NEOPIXEL / 2) ? topPercent : bottomPercent);
   }
   showKeypadLedColors(colors);
 }
@@ -125,15 +145,37 @@ static inline void _uiShowPreviewColors(uint32_t colors[NUM_NEOPIXEL], int brigh
 static inline void _uiUpdatePreview() {
   uint32_t colors[NUM_NEOPIXEL];
   getSchemePreviewColors(_uiPreviewMonth - 1, colors);
-  _uiShowPreviewColors(colors, _uiConfirmedBrightness);
+  _uiShowPreviewColors(colors, _uiConfirmedBrightness, _uiConfirmedBalance);
 }
 
 // Previews the currently-*active* scheme (not whatever's pending in the
-// Presets flow) at the in-progress brightness level.
+// Presets flow) at the in-progress brightness level / balance — whichever
+// of the two is being adjusted is pending, the other is the confirmed one.
 static inline void _uiUpdateBrightnessPreview() {
   uint32_t colors[NUM_NEOPIXEL];
   getSchemePreviewColors(getActiveScheme(), colors);
-  _uiShowPreviewColors(colors, _uiPendingBrightness);
+  _uiShowPreviewColors(colors, _uiPendingBrightness, _uiConfirmedBalance);
+}
+
+static inline void _uiUpdateBalancePreview() {
+  uint32_t colors[NUM_NEOPIXEL];
+  getSchemePreviewColors(getActiveScheme(), colors);
+  _uiShowPreviewColors(colors, _uiConfirmedBrightness, _uiPendingBalance);
+}
+
+// Live, RAM-only preview on the real strips while a knob is turning.
+static inline void _uiPreviewStripsOnQtpy(int brightnessPercent, int balancePercent) {
+  uint8_t topPercent, bottomPercent;
+  balanceStripPercents((uint8_t)brightnessPercent, (uint8_t)balancePercent, &topPercent, &bottomPercent);
+  previewBrightnessOnQtpy(topPercent, bottomPercent);
+}
+
+// Persists the active scheme at the confirmed brightness + balance on the
+// QT Py — the one command that persists there.
+static inline void _uiSendActiveSchemeToQtpy() {
+  SchemeRecipe recipe;
+  buildSchemeRecipe(getActiveScheme(), _uiConfirmedBrightness, _uiConfirmedBalance, &recipe);
+  setActiveSchemeOnQtpy(&recipe);
 }
 
 static inline void _uiRenderMenu() {
@@ -143,6 +185,10 @@ static inline void _uiRenderMenu() {
     renderMenuPresetList(_uiPreviewMonth, SCHEME_NAMES, NUM_SCHEMES);
   } else if (_uiMenuState == UI_MENU_TEST_PATTERN) {
     renderMenuTestPattern();
+  } else if (_uiMenuState == UI_MENU_BALANCE) {
+    uint8_t topScale, bottomScale;
+    balanceStripScales((uint8_t)_uiPendingBalance, &topScale, &bottomScale);
+    renderMenuBalance(_uiPendingBalance, topScale, bottomScale);
   } else {
     renderMenuBrightness(_uiPendingBrightness);
   }
@@ -151,7 +197,7 @@ static inline void _uiRenderMenu() {
 static inline void _uiRenderMessage() {
   if (millis() < _uiHintUntilMs) {
     renderMessage(_uiHintText);
-  } else if (_uiMenuState == UI_MENU_PRESET_LIST || _uiMenuState == UI_MENU_BRIGHTNESS) {
+  } else if (_uiMenuState == UI_MENU_PRESET_LIST || _uiMenuState == UI_MENU_BRIGHTNESS || _uiMenuState == UI_MENU_BALANCE) {
     renderMessage("Rotary Press: Confirm");
   } else if (_uiMenuState == UI_MENU_TEST_PATTERN) {
     renderMessage("Rotary Press: Exit");
@@ -253,33 +299,40 @@ static inline void _uiConfirm() {
     _uiExitTestPattern();
   } else if (_uiMenuState == UI_MENU_PRESET_LIST) {
     setActiveScheme(_uiPreviewMonth - 1);
-    saveSettings(getActiveScheme(), _uiConfirmedBrightness);
-    SchemeRecipe recipe;
-    buildSchemeRecipe(getActiveScheme(), _uiConfirmedBrightness, &recipe);
-    setActiveSchemeOnQtpy(&recipe);
+    saveSettings(getActiveScheme(), _uiConfirmedBrightness, _uiConfirmedBalance);
+    _uiSendActiveSchemeToQtpy();
     clearKeypadLeds();
     _uiEntryState  = UI_ENTRY_IDLE;
     _uiMenuState   = UI_MENU_TOP;
     _uiHintUntilMs = 0;
   } else if (_uiMenuState == UI_MENU_BRIGHTNESS) {
     _uiConfirmedBrightness = _uiPendingBrightness;
-    saveSettings(getActiveScheme(), _uiConfirmedBrightness);
+    saveSettings(getActiveScheme(), _uiConfirmedBrightness, _uiConfirmedBalance);
     // Same scheme + colors, new brightness — this is the one command that
     // persists on the QT Py side (previewBrightnessOnQtpy(), sent live
     // while the knob was turning, deliberately never persists).
-    SchemeRecipe recipe;
-    buildSchemeRecipe(getActiveScheme(), _uiConfirmedBrightness, &recipe);
-    setActiveSchemeOnQtpy(&recipe);
+    _uiSendActiveSchemeToQtpy();
+    clearKeypadLeds();
+    _uiMenuState   = UI_MENU_TOP;
+    _uiHintUntilMs = 0;
+  } else if (_uiMenuState == UI_MENU_BALANCE) {
+    _uiConfirmedBalance = _uiPendingBalance;
+    saveSettings(getActiveScheme(), _uiConfirmedBrightness, _uiConfirmedBalance);
+    _uiSendActiveSchemeToQtpy();  // same as Brightness confirm: persists on the QT Py
     clearKeypadLeds();
     _uiMenuState   = UI_MENU_TOP;
     _uiHintUntilMs = 0;
   } else {
     // UI_MENU_TOP — descend into the highlighted item.
-    if (_uiTopHighlight == 0) {
+    if (_uiTopHighlight == UI_TOP_BRIGHTNESS) {
       _uiMenuState = UI_MENU_BRIGHTNESS;
       _uiPendingBrightness = _uiConfirmedBrightness;
       _uiUpdateBrightnessPreview();
-    } else if (_uiTopHighlight == 1) {
+    } else if (_uiTopHighlight == UI_TOP_BALANCE) {
+      _uiMenuState = UI_MENU_BALANCE;
+      _uiPendingBalance = _uiConfirmedBalance;
+      _uiUpdateBalancePreview();
+    } else if (_uiTopHighlight == UI_TOP_PRESETS) {
       // Two-way sync: ask the QT Py what it's actually showing before
       // browsing starts, rather than trusting the MacroPad's own copy is
       // still accurate (e.g. a QT Py swapped for a spare unit with its own
@@ -292,7 +345,7 @@ static inline void _uiConfirm() {
       }
       _uiMenuState = UI_MENU_PRESET_LIST;
       _uiUpdatePreview();
-    } else if (_uiTopHighlight == 2) {
+    } else if (_uiTopHighlight == UI_TOP_CUSTOM) {
       _uiShowHint("Custom: not built yet");
     } else {
       // Best-effort — the keypad preview below runs regardless of whether
@@ -368,11 +421,13 @@ static inline void _uiHandleDigit(uint8_t digit) {
 }
 
 static inline void initUiController() {
-  int savedScheme, savedBrightness;
-  loadSettings(&savedScheme, &savedBrightness);
+  int savedScheme, savedBrightness, savedBalance;
+  loadSettings(&savedScheme, &savedBrightness, &savedBalance);
   setActiveScheme(savedScheme);
   _uiConfirmedBrightness = savedBrightness;
   _uiPendingBrightness   = savedBrightness;
+  _uiConfirmedBalance    = savedBalance;
+  _uiPendingBalance      = savedBalance;
   _uiPreviewMonth        = savedScheme + 1;  // so browsing Presets starts on the saved month, not always January
   _uiLastInputMs         = millis();
   _uiQtpyConnected       = isQtpyConnected();
@@ -431,21 +486,28 @@ static inline void updateUiController() {
 
   if (delta != 0) {
     if (_uiMenuState == UI_MENU_TOP) {
-      _uiTopHighlight = (_uiTopHighlight + delta) % 4;
-      if (_uiTopHighlight < 0) _uiTopHighlight += 4;
+      _uiTopHighlight = (_uiTopHighlight + delta) % TOP_MENU_ITEM_COUNT;
+      if (_uiTopHighlight < 0) _uiTopHighlight += TOP_MENU_ITEM_COUNT;
     } else if (_uiMenuState == UI_MENU_PRESET_LIST) {
       int month = ((_uiPreviewMonth - 1 + delta) % NUM_SCHEMES + NUM_SCHEMES) % NUM_SCHEMES + 1;
       _uiPreviewMonth = month;
       _uiUpdatePreview();
     } else if (_uiMenuState == UI_MENU_TEST_PATTERN) {
       // no-op — nothing to adjust while Test Pattern is running
+    } else if (_uiMenuState == UI_MENU_BALANCE) {
+      int balance = _uiPendingBalance + delta * BRIGHTNESS_STEP_PERCENT;  // same 5%/detent feel as Brightness
+      if (balance < 0) balance = 0;
+      if (balance > 100) balance = 100;
+      _uiPendingBalance = balance;
+      _uiUpdateBalancePreview();
+      _uiPreviewStripsOnQtpy(_uiConfirmedBrightness, _uiPendingBalance);  // live on the real strips too; not persisted until confirm
     } else {  // UI_MENU_BRIGHTNESS
       int brightness = _uiPendingBrightness + delta * BRIGHTNESS_STEP_PERCENT;
       if (brightness < 0) brightness = 0;
       if (brightness > 100) brightness = 100;
       _uiPendingBrightness = brightness;
       _uiUpdateBrightnessPreview();
-      previewBrightnessOnQtpy(_uiPendingBrightness);  // live on the real strips too; not persisted until confirm
+      _uiPreviewStripsOnQtpy(_uiPendingBrightness, _uiConfirmedBalance);  // live on the real strips too; not persisted until confirm
     }
     _uiRenderAll();
   }
