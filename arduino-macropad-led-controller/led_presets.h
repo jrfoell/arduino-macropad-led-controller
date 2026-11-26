@@ -72,7 +72,9 @@ static const char* const SCHEME_NAMES[NUM_SCHEMES] = {
 // below -- still softer/lighter than the fully-saturated primaries used
 // elsewhere (e.g. PIXEL_RED at 100% saturation), but now clearly tinted.
 #define PIXEL_PASTEL_PINK   ((uint32_t)0x00DC5A8C)  // Color(220,  90, 140)
-#define PIXEL_PASTEL_PEACH  ((uint32_t)0x00DC965A)  // Color(220, 150,  90)
+// Color(220,150,90) was too close to PIXEL_PASTEL_YELLOW outdoors -> less
+// green and blue for a deeper orange that still reads lighter than PIXEL_ORANGE.
+#define PIXEL_PASTEL_PEACH  ((uint32_t)0x00DC6E3C)  // Color(220, 110,  60)
 #define PIXEL_PASTEL_BLUE   ((uint32_t)0x005AA0DC)  // Color( 90, 160, 220)
 #define PIXEL_PASTEL_YELLOW ((uint32_t)0x00DCC35A)  // Color(220, 195,  90)
 #define PIXEL_PASTEL_GREEN  ((uint32_t)0x0064C878)  // Color(100, 200, 120)
