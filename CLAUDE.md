@@ -4,12 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Deployment status
 
-**The installation is live outside (as of 2026-10-31) — do not flash either
-board without explicit confirmation from the user first.** Development
-continues via commit+push once everything compiles clean; flashing is a
-separate, explicitly-requested step now, not automatic.
+**The installation is live outside (as of 2026-10-31). Standing rule (as
+of 2026-11-25): once a change compiles clean, commit+push, then flash it
+to whichever board(s) the change needs, *if* those boards are currently
+connected over USB (`arduino-cli board list`) — no separate confirmation
+needed.** If a needed board isn't connected, don't wait or ask; just
+report what's pending. Exception: if the change touches the I2C protocol
+(`MacropadShared/src/i2c_protocol.h` / `scheme_recipe.h`) and only one of
+the two boards is connected, say so before flashing that one alone — a
+half-flashed protocol change leaves presets unchangeable from the MacroPad
+until the other board catches up.
 
-**Last commit actually flashed: MacroPad `2cab2e6`, QT Py `ba56d06`**
+**Last commit actually flashed: MacroPad `ed6d13e`, QT Py `ba56d06`**
 (the commits in between were MacroPad-only color changes, so the two are
 protocol-compatible).
 Update this line every time a flash actually happens, so anyone (including
